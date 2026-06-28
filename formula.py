@@ -16,8 +16,8 @@ Usage:
 """
 
 import argparse
-import json
 import os
+import sqlite3
 import sys
 import textwrap
 from pathlib import Path
@@ -28,36 +28,86 @@ if str(_project_dir) not in sys.path:
 
 from formula_lib import (
     db_path, get_conn, en, rebuild_fts, migrate_db,
-    render_formula_items, render_dimensions, dims_from_row, DIM_ORDER, DIM_COLS,
-    render_default_unit_html, parse_default_unit_json,
+    render_formula_items, render_dimensions, dims_from_row,
+    parse_default_unit_json, difficulty_stars,
     get_formula_detail, get_formula_items,
     get_formula_conditions, get_formula_relations, get_formula_quantities,
     get_quantity_detail, get_quantity_units, get_quantity_formulas,
-    get_formulas_by_science,
     search,
     export_csv, export_csv_dir, export_xlsx, export_ods,
     import_csv, import_csv_dir, import_xlsx, import_ods,
 )
 
-SCRIPT_DIR = _project_dir
+
+def _err(msg, code=1):
+    print(f"error: {msg}", file=sys.stderr)
+    sys.exit(code)
 
 
 # Init
 
 def cmd_init(args):
-    conn = get_conn()
-    schema = (SCRIPT_DIR / "schema.sql").read_text()
-    conn.executescript(schema)
-    seed = (SCRIPT_DIR / "seed.sql").read_text()
-    conn.executescript(seed)
-    views = (SCRIPT_DIR / "views.sql").read_text()
-    conn.executescript(views)
-    units_seed = (SCRIPT_DIR / "seed_units.sql")
-    if units_seed.exists():
-        conn.executescript(units_seed.read_text())
-    migrate_db(conn)
-    n = rebuild_fts(conn)
-    changes = conn.total_changes
+    if (_project_dir / "schema.sql").exists() and not args.force:
+        existing = get_conn()
+        try:
+            r = existing.execute(
+                "SELECT count(*) AS c FROM sqlite_master WHERE type='table' AND name='formula'"
+            ).fetchone()
+        finally:
+            existing.close()
+        if r and r["c"]:
+            _err(
+                "database already initialised. Pass --force to re-initialise "
+                "(this will wipe existing data).",
+                code=2,
+            )
+    try:
+        conn = get_conn()
+    except sqlite3.Error as e:
+        _err(f"could not open database: {e}")
+
+    changes = 0
+    n = 0
+    try:
+        if args.force:
+            conn.execute("PRAGMA foreign_keys = OFF")
+            for tbl in ("formula_relation", "condition", "formula_item",
+                        "formula", "unit", "quantity"):
+                conn.execute(f"DROP TABLE IF EXISTS {tbl}")
+            for fts in ("formula_fts", "quantity_fts", "unit_fts"):
+                conn.execute(f"DROP TABLE IF EXISTS {fts}")
+            conn.execute("PRAGMA foreign_keys = ON")
+        schema = (_project_dir / "schema.sql").read_text()
+        conn.executescript(schema)
+        migrate_db(conn)
+        seed = (_project_dir / "seed.sql").read_text()
+        conn.executescript(seed)
+        units_seed = (_project_dir / "seed_units.sql")
+        if units_seed.exists():
+            try:
+                conn.executescript(units_seed.read_text())
+            except FileNotFoundError:
+                pass
+        filler = (_project_dir / "seed_formulas.sql")
+        if filler.exists():
+            try:
+                conn.executescript(filler.read_text())
+            except FileNotFoundError:
+                pass
+        migrate_db(conn)
+        n = rebuild_fts(conn)
+        changes = conn.total_changes
+    except Exception as e:
+        try:
+            conn.rollback()
+        except sqlite3.Error:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
+        _err(f"initialisation failed: {e}")
+
     conn.close()
     print(f"Database initialised at {db_path()}")
     print(f"  {changes} SQL statements executed, {n} formulas indexed for search.")
@@ -70,10 +120,10 @@ def cmd_list(args):
     where = []
     params = []
     if args.branch:
-        where.append("json_extract(f.branch, '$.en-us') = ?")
+        where.append("f.branch = ?")
         params.append(args.branch)
     if args.topic:
-        where.append("json_extract(f.topic, '$.en-us') = ?")
+        where.append("f.topic = ?")
         params.append(args.topic)
     if args.difficulty:
         parts = args.difficulty.split("-")
@@ -86,8 +136,8 @@ def cmd_list(args):
 
     sql = """
         SELECT f.id, json_extract(f.name, '$.en-us') AS name_en,
-               json_extract(f.branch, '$.en-us') AS branch_en,
-               json_extract(f.topic, '$.en-us') AS topic_en,
+               f.branch AS branch_id,
+               f.topic AS topic_id,
                f.difficulty
         FROM formula f
     """
@@ -102,15 +152,15 @@ def cmd_list(args):
         return
     by_branch = {}
     for r in rows:
-        b = r["branch_en"] or "Uncategorised"
-        t = r["topic_en"] or "General"
+        b = r["branch_id"] or "uncategorised"
+        t = r["topic_id"] or "general"
         by_branch.setdefault(b, {}).setdefault(t, []).append(r)
     for branch, topics in by_branch.items():
-        print(f"\n\u2500\u2500 \033[1m{branch}\033[0m \u2500\u2500")
+        print(f"\n\u2500\u2500 \033[1m{branch.replace('_', ' ').title()}\033[0m \u2500\u2500")
         for topic, formulas in topics.items():
-            print(f"  \033[33m{topic}\033[0m:")
+            print(f"  \033[33m{topic.replace('_', ' ').title()}\033[0m:")
             for f in formulas:
-                s = "\u2605" * min(f["difficulty"], 5) + "\u2606" * max(0, 5 - min(f["difficulty"], 5))
+                s = difficulty_stars(f["difficulty"])
                 print(f"    {f['id']:40s} {s}  {f['name_en']}")
     print()
 
@@ -134,7 +184,7 @@ def cmd_show(args):
     diff = row["difficulty"]
     branch = en(row["branch"])
     topic = en(row["topic"])
-    stars = "\u2605" * min(diff, 5) + "\u2606" * max(0, 5 - min(diff, 5))
+    stars = difficulty_stars(diff)
 
     print(f"\n  \033[1m{name}\033[0m  {stars}")
     if branch:
@@ -180,7 +230,7 @@ def cmd_search(args):
     print(f"\n  \033[1m{len(rows)} result(s)\033[0m for \033[33m'{args.query}'\033[0m\n")
     for r in rows:
         if r["kind"] == "formula":
-            s = "\u2605" * min(r["difficulty"], 5) + "\u2606" * max(0, 5 - min(r["difficulty"], 5))
+            s = difficulty_stars(r["difficulty"])
             print(f"  \033[36mformula \033[0m{r['id']:40s} {s}  {r['name_en']}")
         elif r["kind"] == "quantity":
             print(f"  \033[32mquantity\033[0m {r['id']:40s}        {r['name_en']} ($\\{r['extra']}$)")
@@ -253,7 +303,7 @@ def cmd_quantity(args):
     if formulas:
         print(f"\n  \033[1mAppears in formulas:\033[0m")
         for f in formulas:
-            s = "\u2605" * min(f["difficulty"], 5) + "\u2606" * max(0, 5 - min(f["difficulty"], 5))
+            s = difficulty_stars(f["difficulty"])
             print(f"    {f['id']:40s} {s}  {f['name_en']}")
     print()
 
@@ -293,22 +343,22 @@ def cmd_browse(args):
     conn = get_conn()
     rows = conn.execute("""
         SELECT f.id, json_extract(f.name, '$.en-us') AS name_en,
-               json_extract(f.branch, '$.en-us') AS branch_en,
-               json_extract(f.topic, '$.en-us') AS topic_en, f.difficulty
+               f.branch AS branch_id,
+               f.topic AS topic_id, f.difficulty
         FROM formula f ORDER BY f.branch, f.topic, f.difficulty, f.id
     """).fetchall()
     conn.close()
     tree = {}
     for r in rows:
-        b = r["branch_en"] or "Uncategorised"
-        t = r["topic_en"] or "General"
+        b = r["branch_id"] or "uncategorised"
+        t = r["topic_id"] or "general"
         tree.setdefault(b, {}).setdefault(t, []).append(r)
     for branch, topics in tree.items():
-        print(f"\n  \033[1m{branch}\033[0m")
+        print(f"\n  \033[1m{branch.replace('_', ' ').title()}\033[0m")
         for topic, formulas in topics.items():
-            print(f"    \033[33m{topic}\033[0m")
+            print(f"    \033[33m{topic.replace('_', ' ').title()}\033[0m")
             for f in formulas:
-                s = "\u2605" * min(f["difficulty"], 5) + "\u2606" * max(0, 5 - min(f["difficulty"], 5))
+                s = difficulty_stars(f["difficulty"])
                 print(f"      {f['id']:38s} {s}  {f['name_en']}")
     print()
 
@@ -332,9 +382,10 @@ def cmd_export(args):
         print(f"Exported to {out}")
     else:
         data = export_csv(conn)
-        conn.close()
         if args.output:
-            Path(args.output).write_text(data)
+            tmp = Path(args.output + ".tmp")
+            tmp.write_text(data)
+            os.replace(tmp, args.output)
             print(f"Exported to {args.output}")
         else:
             sys.stdout.write(data)
@@ -369,6 +420,7 @@ def cmd_import(args):
 # Main
 
 def main():
+    db_default = db_path()
     parser = argparse.ArgumentParser(
         description="Scifind \u2014 structured physics formula database",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -390,10 +442,14 @@ def main():
               formula import formulas.xlsx
         """),
     )
-    parser.add_argument("--db", help=f"Database path (default: {db_path()})")
+    parser.add_argument("--db", help=f"Database path (default: {db_default})")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("init", help="Create and seed the database")
+    p_init = sub.add_parser("init", help="Create and seed the database")
+    p_init.add_argument(
+        "--force", action="store_true",
+        help="Re-initialise even if database already exists (wipes existing data).",
+    )
 
     p_list = sub.add_parser("list", help="List formulas")
     p_list.add_argument("--branch", "-b", help="Filter by branch")
@@ -442,7 +498,16 @@ def main():
         "export": cmd_export,
         "import": cmd_import,
     }
-    commands[args.command](args)
+    try:
+        commands[args.command](args)
+    except sqlite3.Error as e:
+        _err(f"database error: {e}")
+    except OSError as e:
+        _err(f"file error: {e}")
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except Exception as e:
+        _err(f"unexpected error: {e}")
 
 
 if __name__ == "__main__":

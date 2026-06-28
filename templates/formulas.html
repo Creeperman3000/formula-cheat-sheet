@@ -1,22 +1,22 @@
 {% extends "base.html" %}
-{% block title %}All Formulas{% endblock %}
+{% block title %}{{ heading }}{% endblock %}
 {% block content %}
 
-<h2>All Formulas</h2>
+<h2>{{ heading }}</h2>
 
-<table border="1" cellpadding="4" cellspacing="0">
-<tr><th>Name</th><th>Science</th><th>Branch</th><th>Topic</th><th>Difficulty</th></tr>
+{% if formulas %}
+<div class="formula-grid">
 {% for f in formulas %}
-<tr>
-  <td><a href="/formula/{{ f.id }}">{{ f.name_en }}</a></td>
-  <td>{{ f.science_en or "" }}</td>
-  <td>{{ f.branch_en or "" }}</td>
-  <td>{{ f.topic_en or "" }}</td>
-  <td>{{ f.difficulty }}/10</td>
-</tr>
+  <div class="formula-card">
+    <a href="/formula/{{ f.id }}">
+      <div class="formula-eqn">$${{ f.latex }}$$</div>
+      <div class="formula-name">{{ f.name_en }}</div>
+    </a>
+  </div>
 {% endfor %}
-</table>
-
-<p><a href="/">&larr; Back to home</a></p>
+</div>
+{% else %}
+<p>No formulas found matching the selected filters.</p>
+{% endif %}
 
 {% endblock %}

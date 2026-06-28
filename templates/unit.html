@@ -2,19 +2,36 @@
 {% block title %}{{ unit.name_en or unit.id }}{% endblock %}
 {% block content %}
 
-<h2>{{ unit.name_en }}</h2>
+<h2 class="detail-heading">{% if unit.symbol %}${{ render_symbol(unit.symbol) }}$ {% endif %}{{ unit.name_en or unit.id }}</h2>
 
-<table border="1" cellpadding="4" cellspacing="0">
-<tr><td>Symbol</td><td>${{ render_symbol(unit.symbol) }}$</td></tr>
-<tr><td>Quantity</td><td><a href="/quantity/{{ unit.quantity_id }}">{{ unit.quantity_name }}</a></td></tr>
-<tr><td>System</td><td>{{ unit.unit_system or "any" }}</td></tr>
-<tr><td>Factor</td><td>{{ unit.factor }}</td></tr>
-{% if unit.offset %}
-<tr><td>Offset</td><td>{{ unit.offset }}</td></tr>
+{% if unit.quantity_id %}
+<div class="breadcrumb-bar">
+  <a href="/quantities?science={{ unit.science_id }}">{{ unit.science }}</a>{% if unit.branch_id %}
+  &gt;
+  <a href="/quantities?science={{ unit.science_id }}&amp;branch={{ unit.branch_id }}">{{ unit.branch }}</a>{% endif %}{% if unit.subbranch_id %}
+  &gt;
+  <a href="/quantities?science={{ unit.science_id }}&amp;branch={{ unit.branch_id }}&amp;subbranch={{ unit.subbranch_id }}">{{ unit.subbranch }}</a>{% endif %}{% if unit.topic_id %}
+  &gt;
+  <a href="/quantities?science={{ unit.science_id }}&amp;branch={{ unit.branch_id }}&amp;subbranch={{ unit.subbranch_id }}&amp;topic={{ unit.topic_id }}">{{ unit.topic }}</a>{% endif %}
+  &gt;
+  <a href="/quantity/{{ unit.quantity_id }}">{{ unit.quantity_name }}</a>
+</div>
 {% endif %}
-<tr><td>Default unit</td><td>{{ "✓" if unit.default_unit else "" }}</td></tr>
-</table>
 
-<p><a href="/quantity/{{ unit.quantity_id }}">&larr; Back to quantity</a></p>
+<div class="detail-meta">
+  <span>Unit</span>
+</div>
+
+<div class="detail-section">
+{% if unit.default_unit == 1 %}
+  <div>This is the SI base unit of <a href="/quantity/{{ unit.quantity_id }}">{{ unit.quantity_name }}</a>.</div>
+  <div><b>Symbol:</b> ${{ render_symbol(unit.symbol) }}$</div>
+{% else %}
+  <div><b>Quantity:</b> <a href="/quantity/{{ unit.quantity_id }}">{{ unit.quantity_name }}</a></div>
+  <div><b>System:</b> {{ unit.unit_system or "any" }}</div>
+  <div><b>Factor to ${{ render_symbol(si_unit_symbol) }}$:</b> {{ unit.factor }}</div>
+  {% if unit.offset %}<div><b>Offset from ${{ render_symbol(si_unit_symbol) }}$:</b> {{ unit.offset }}</div>{% endif %}
+{% endif %}
+</div>
 
 {% endblock %}

@@ -7,9 +7,10 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS formula (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL,       -- JSON i18n: {"en-us":"...","en-uk":"..."}
-    science     TEXT,                -- JSON i18n
-    branch      TEXT,                -- JSON i18n
-    topic       TEXT,                -- JSON i18n
+    science     TEXT,                -- ID into sciences.json
+    branch      TEXT,                -- ID into sciences.json
+    subbranch   TEXT,                -- ID into sciences.json (optional)
+    topic       TEXT,                -- ID into sciences.json
     difficulty  INTEGER CHECK (difficulty BETWEEN 1 AND 10),
     description TEXT,                -- JSON i18n
     links       TEXT,                -- JSON array: [{"label":{i18n},"url":"..."}]
@@ -26,14 +27,15 @@ CREATE TABLE IF NOT EXISTS formula_item (
     is_primary       INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0,1)),
     sort_order       INTEGER NOT NULL DEFAULT 0,
     coeff_value      REAL,
-    coeff_special    TEXT,
+    latex_coef       TEXT,
     coeff_exponent   REAL DEFAULT 1,
     quantity_id      TEXT REFERENCES quantity(id),
     var_exponent     REAL DEFAULT 1,
     label            TEXT,
+    symbol_overwrite TEXT,
+    quantity_name_overwrite TEXT,        -- JSON i18n: overrides the quantity name for this formula_item
     latex_prefix     TEXT,
     latex_suffix     TEXT,
-    symbol_overwrite TEXT,
 
     PRIMARY KEY (formula_id, term, is_primary, sort_order)
 );
@@ -72,12 +74,15 @@ CREATE TABLE IF NOT EXISTS quantity (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL,       -- JSON i18n
     symbol      TEXT NOT NULL,
-    science     TEXT,                -- JSON i18n
-    branch      TEXT,                -- JSON i18n
-    topic       TEXT,                -- JSON i18n
+    symbol_overwrite TEXT,           -- JSON i18n override of quantity symbol
+    science     TEXT,                -- ID into sciences.json
+    branch      TEXT,                -- ID into sciences.json
+    subbranch   TEXT,                -- ID into sciences.json (optional)
+    topic       TEXT,                -- ID into sciences.json
     difficulty  INTEGER CHECK (difficulty BETWEEN 1 AND 10),
     description TEXT,                -- JSON i18n
     links       TEXT,                -- JSON array
+    is_dim      INTEGER NOT NULL DEFAULT 0 CHECK (is_dim IN (0,1)),
     default_unit TEXT,               -- JSON array: [{"unit":"<id>","exponent":<n>},...]
     dim_M       REAL NOT NULL DEFAULT 0,
     dim_L       REAL NOT NULL DEFAULT 0,
@@ -101,6 +106,7 @@ CREATE TABLE IF NOT EXISTS unit (
     default_unit INTEGER NOT NULL DEFAULT 0 CHECK (default_unit IN (0,1)),
     unit_system  TEXT CHECK (unit_system IN ('SI','CGS','Imperial') OR unit_system IS NULL),
     factor       REAL NOT NULL DEFAULT 1,
+    latex_factor TEXT,               -- LaTeX display for factor (e.g. "\frac{180}{\pi}")
     offset       REAL NOT NULL DEFAULT 0
 );
 

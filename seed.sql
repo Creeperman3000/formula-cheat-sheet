@@ -11,7 +11,7 @@ INSERT INTO quantity (id, name, symbol, science, branch, topic, difficulty, defa
   ('acceleration',         '{"en-us": "Acceleration"}',         'a', '{"en-us": "Physics"}', '{"en-us": "Classical mechanics"}', '{"en-us": "Kinematics"}',         2, NULL,                                                         0,  1, -2, 0, 0, 0, 0),
   ('energy',               '{"en-us": "Energy"}',               'E', '{"en-us": "Physics"}', '{"en-us": "Classical mechanics"}', '{"en-us": "Energy"}',             2, NULL,                                                         1,  2, -2, 0, 0, 0, 0),
   ('velocity',             '{"en-us": "Velocity"}',             'v', '{"en-us": "Physics"}', '{"en-us": "Classical mechanics"}', '{"en-us": "Kinematics"}',         2, NULL,                                                         0,  1, -1, 0, 0, 0, 0),
-  ('length',               '{"en-us": "Length"}',               's', '{"en-us": "Physics"}', '{"en-us": "Classical mechanics"}', '{"en-us": "Kinematics"}',         1, '[{"unit": "metre", "exponent": 1}]',                          1,  0,  0, 0, 0, 0, 0),
+  ('length',               '{"en-us": "Length"}',               'l', '{"en-us": "Physics"}', '{"en-us": "Classical mechanics"}', '{"en-us": "Kinematics"}',         1, '[{"unit": "metre", "exponent": 1}]',                          0,  1,  0, 0, 0, 0, 0),
   ('internal_energy',      '{"en-us": "Internal energy"}',      'U', '{"en-us": "Physics"}', '{"en-us": "Thermodynamics"}',      '{"en-us": "First law"}',          3, NULL,                                                         1,  2, -2, 0, 0, 0, 0),
   ('heat',                 '{"en-us": "Heat"}',                 'Q', '{"en-us": "Physics"}', '{"en-us": "Thermodynamics"}',      '{"en-us": "First law"}',          3, NULL,                                                         1,  2, -2, 0, 0, 0, 0),
   ('work',                 '{"en-us": "Work"}',                 'W', '{"en-us": "Physics"}', '{"en-us": "Classical mechanics"}', '{"en-us": "Energy"}',             2, NULL,                                                         1,  2, -2, 0, 0, 0, 0),
@@ -28,17 +28,17 @@ INSERT INTO quantity (id, name, symbol, science, branch, topic, difficulty, defa
 -- --------------------------------------------------
 -- Units
 -- --------------------------------------------------
-INSERT INTO unit (id, name, symbol, quantity_id, default_unit, unit_system, factor, offset) VALUES
-  ('metre',          '{"en-us": "Meter", "en-uk": "Metre"}',               'm',                'length',       1, 'SI',  1,      0),
-  ('centimetre',     '{"en-us": "Centimeter", "en-uk": "Centimetre"}',     'cm',               'length',       0, 'CGS', 0.01,   0),
-  ('kilogram',       '{"en-us": "Kilogram"}',                              'kg',               'mass',         1, 'SI',  1,      0),
-  ('gram',           '{"en-us": "Gram"}',                                  'g',                'mass',         0, 'CGS', 0.001,  0),
-  ('kelvin',         '{"en-us": "Kelvin"}',                                'K',                'temperature',  1, 'SI',  1,      0),
-  ('degree_celsius', '{"en-us": "Degree Celsius"}',                        '\degreeCelsius',   'temperature',  0, NULL, 1,     273.15),
-  ('newton',         '{"en-us": "Newton"}',                                '\newton',          'force',        1, 'SI',  1,      0),
-  ('dyne',           '{"en-us": "Dyne"}',                                  'dyn',              'force',        0, 'CGS', 0.00001,0),
-  ('ohm',            '{"en-us": "Ohm"}',                                   '\ohm',             'resistance',   1, 'SI',  1,      0),
-  ('second',         '{"en-us": "Second"}',                                's',                'period',       1, 'SI',  1,      0);
+INSERT INTO unit (id, name, symbol, quantity_id, default_unit, unit_system, factor, latex_factor, offset) VALUES
+('metre', '{"en-us": "Meter", "en-uk": "Metre"}', 'm', 'length', 1, 'SI', 1, NULL, 0),
+('centimetre', '{"en-us": "Centimeter", "en-uk": "Centimetre"}', 'cm', 'length', 0, 'CGS', 0.01, NULL, 0),
+('kilogram', '{"en-us": "Kilogram"}', 'kg', 'mass', 1, 'SI', 1, NULL, 0),
+('gram', '{"en-us": "Gram"}', 'g', 'mass', 0, 'CGS', 0.001, NULL, 0),
+('kelvin', '{"en-us": "Kelvin"}', 'K', 'temperature', 1, 'SI', 1, NULL, 0),
+('degree_celsius', '{"en-us": "Degree Celsius"}', '\degreeCelsius', 'temperature', 0, NULL, 1, NULL, 273.15),
+('newton', '{"en-us": "Newton"}', '\newton', 'force', 1, 'SI', 1, NULL, 0),
+('dyne', '{"en-us": "Dyne"}', 'dyn', 'force', 0, 'CGS', 0.00001, NULL, 0),
+('ohm', '{"en-us": "Ohm"}', '\ohm', 'resistance', 1, 'SI', 1, NULL, 0),
+('second', '{"en-us": "Second"}', 's', 'period', 1, 'SI', 1, NULL, 0);
 
 -- --------------------------------------------------
 -- Formulas
@@ -122,19 +122,19 @@ INSERT INTO formula_item (formula_id, term, is_primary, sort_order, quantity_id,
 -- Ek = ½mv²
 -- 1 = Ek⁻¹ · 2⁻¹ · m¹ · v²
 INSERT INTO formula_item (formula_id, term, is_primary, sort_order, coeff_value, coeff_exponent, quantity_id, var_exponent, label) VALUES
-  ('kinetic_energy', 1, 1, 0, NULL, NULL, 'energy', -1, 'k'),
-  ('kinetic_energy', 1, 0, 0, 2,     -1,   NULL,    NULL, NULL),
-  ('kinetic_energy', 1, 0, 1, NULL, NULL, 'mass',   1,    NULL),
-  ('kinetic_energy', 1, 0, 2, NULL, NULL, 'velocity', 2,  NULL);
+('kinetic_energy', 1, 1, 0, NULL, NULL, 'energy', -1, '{"en-us": "k"}'),
+('kinetic_energy', 1, 0, 0, 2, -1, NULL, NULL, NULL),
+('kinetic_energy', 1, 0, 1, NULL, NULL, 'mass', 1, NULL),
+('kinetic_energy', 1, 0, 2, NULL, NULL, 'velocity', 2, NULL);
 
 -- v² = u² + 2ar  (v=final, u=initial) — symbol_overwrite: s→r, v→u for initial velocity
 -- 1 = v_final⁻² · u_initial² · 2 · a¹ · r¹
 INSERT INTO formula_item (formula_id, term, is_primary, sort_order, coeff_value, quantity_id, var_exponent, label, symbol_overwrite) VALUES
-  ('suvat_v2', 1, 1, 0, NULL, 'velocity',    -2, 'final',   NULL),
-  ('suvat_v2', 2, 0, 0, NULL, 'velocity',     2,  'initial', 'u'),
-  ('suvat_v2', 3, 0, 0, 2,    NULL,          NULL, NULL,     NULL),
-  ('suvat_v2', 3, 0, 1, NULL, 'acceleration', 1,   NULL,     NULL),
-  ('suvat_v2', 3, 0, 2, NULL, 'length',       1,   NULL,     'r');
+('suvat_v2', 1, 1, 0, NULL, 'velocity', -2, '{"en-us": "final"}', NULL),
+('suvat_v2', 2, 0, 0, NULL, 'velocity', 2, '{"en-us": "initial"}', '{"en-us": "u"}'),
+('suvat_v2', 3, 0, 0, 2, NULL, NULL, NULL, NULL),
+('suvat_v2', 3, 0, 1, NULL, 'acceleration', 1, NULL, NULL),
+('suvat_v2', 3, 0, 2, NULL, 'length', 1, NULL, '{"en-us": "r"}');
 
 -- ΔU = Q − W
 -- 1 = ΔU⁻¹ · Q¹ · (−1 · W¹)
@@ -146,14 +146,14 @@ INSERT INTO formula_item (formula_id, term, is_primary, sort_order, coeff_value,
 
 -- m₁u₁ + m₂u₂ = m₁v₁ + m₂v₂
 INSERT INTO formula_item (formula_id, term, is_primary, sort_order, quantity_id, var_exponent, label) VALUES
-  ('conservation_of_momentum', 1, 1, 0, 'mass',     -1, '1'),
-  ('conservation_of_momentum', 1, 1, 1, 'velocity', -1, 'initial'),
-  ('conservation_of_momentum', 2, 1, 0, 'mass',     -1, '2'),
-  ('conservation_of_momentum', 2, 1, 1, 'velocity', -1, 'initial'),
-  ('conservation_of_momentum', 3, 0, 0, 'mass',     1,  '1'),
-  ('conservation_of_momentum', 3, 0, 1, 'velocity', 1,  'final'),
-  ('conservation_of_momentum', 4, 0, 0, 'mass',     1,  '2'),
-  ('conservation_of_momentum', 4, 0, 1, 'velocity', 1,  'final');
+('conservation_of_momentum', 1, 1, 0, 'mass', -1, '{"en-us": "1"}'),
+('conservation_of_momentum', 1, 1, 1, 'velocity', -1, '{"en-us": "initial"}'),
+('conservation_of_momentum', 2, 1, 0, 'mass', -1, '{"en-us": "2"}'),
+('conservation_of_momentum', 2, 1, 1, 'velocity', -1, '{"en-us": "initial"}'),
+('conservation_of_momentum', 3, 0, 0, 'mass', 1, '{"en-us": "1"}'),
+('conservation_of_momentum', 3, 0, 1, 'velocity', 1, '{"en-us": "final"}'),
+('conservation_of_momentum', 4, 0, 0, 'mass', 1, '{"en-us": "2"}'),
+('conservation_of_momentum', 4, 0, 1, 'velocity', 1, '{"en-us": "final"}');
 
 -- PV = nRT
 INSERT INTO formula_item (formula_id, term, is_primary, sort_order, quantity_id, var_exponent) VALUES
@@ -164,19 +164,19 @@ INSERT INTO formula_item (formula_id, term, is_primary, sort_order, quantity_id,
   ('ideal_gas_law', 2, 0, 2, 'temperature',   1);
 
 -- T² = (4π²/GM) · a³
-INSERT INTO formula_item (formula_id, term, is_primary, sort_order, coeff_value, coeff_special, coeff_exponent, quantity_id, var_exponent) VALUES
+INSERT INTO formula_item (formula_id, term, is_primary, sort_order, coeff_value, latex_coef, coeff_exponent, quantity_id, var_exponent) VALUES
   ('keplers_third_law', 1, 1, 0, NULL, NULL, NULL, 'period',                -2),
   ('keplers_third_law', 2, 0, 0, 4,    NULL, 1,    NULL,                   NULL),
-  ('keplers_third_law', 2, 0, 1, NULL, 'pi', 2,    NULL,                   NULL),
+  ('keplers_third_law', 2, 0, 1, NULL, '\\pi', 2,    NULL,                   NULL),
   ('keplers_third_law', 2, 0, 2, NULL, NULL, NULL, 'gravitational_constant', -1),
   ('keplers_third_law', 2, 0, 3, NULL, NULL, NULL, 'mass',                   -1),
   ('keplers_third_law', 2, 0, 4, NULL, NULL, NULL, 'length',                  3);
 
 -- 1/R = 1/R₁ + 1/R₂
 INSERT INTO formula_item (formula_id, term, is_primary, sort_order, quantity_id, var_exponent, label) VALUES
-  ('parallel_resistance', 1, 1, 0, 'resistance', 1,  NULL),
-  ('parallel_resistance', 2, 0, 0, 'resistance', -1, '1'),
-  ('parallel_resistance', 3, 0, 0, 'resistance', -1, '2');
+('parallel_resistance', 1, 1, 0, 'resistance', 1, NULL),
+('parallel_resistance', 2, 0, 0, 'resistance', -1, '{"en-us": "1"}'),
+('parallel_resistance', 3, 0, 0, 'resistance', -1, '{"en-us": "2"}');
 
 INSERT INTO formula (id, name, science, branch, topic, difficulty, description) VALUES
   ('first_law_thermodynamics_adiabatic',

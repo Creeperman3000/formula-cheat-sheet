@@ -2,42 +2,102 @@
 {% block title %}{{ q.name_en }}{% endblock %}
 {% block content %}
 
-<h2>${{ q.symbol }}$ &mdash; {{ q.name_en }}</h2>
-<p><small>{{ q.id }}</small></p>
+<h2 class="detail-heading">{% if q.symbol %}${{ q.symbol }}$ {% endif %}{{ q.name_en }}</h2>
 
-{% if q.dim_M or q.dim_L or q.dim_T or q.dim_I or q.dim_Θ or q.dim_N or q.dim_J %}
-<p><b>Dimensions:</b> ${{ fmt_dim(q.dim_M, q.dim_L, q.dim_T, q.dim_I, q.dim_Θ, q.dim_N, q.dim_J) }}$</p>
+{% if q.science_id %}
+<div class="breadcrumb-bar">
+  <a href="/quantities?science={{ q.science_id }}">{{ q.science }}</a>
+  {% if q.branch_id %}
+  &gt;
+  <a href="/quantities?science={{ q.science_id }}&amp;branch={{ q.branch_id }}">{{ q.branch }}</a>
+  {% endif %}
+  {% if q.subbranch_id %}
+  &gt;
+  <a href="/quantities?science={{ q.science_id }}&amp;branch={{ q.branch_id }}&amp;subbranch={{ q.subbranch_id }}">{{ q.subbranch }}</a>
+  {% endif %}
+  {% if q.topic_id %}
+  &gt;
+  <a href="/quantities?science={{ q.science_id }}&amp;branch={{ q.branch_id }}&amp;subbranch={{ q.subbranch_id }}&amp;topic={{ q.topic_id }}">{{ q.topic }}</a>
+  {% endif %}
+</div>
 {% endif %}
 
+<div class="detail-meta">
+  {% if dim_latex %}
+  <span>Dimensions: ${{ dim_latex }}$</span>
+  {% endif %}
+  {% if q.difficulty %}
+  <span>Difficulty {{ q.difficulty }}/10</span>
+  {% endif %}
+</div>
+
 {% if q.description_en %}
-<p><i>{{ q.description_en }}</i></p>
+<div class="detail-desc">{{ q.description_en }}</div>
+{% endif %}
+
+{% if primary_formulas %}
+<div class="detail-section">
+  <h3>Appears in</h3>
+  <ul>
+  {% for f in primary_formulas %}
+    <li><a href="/formula/{{ f.id }}">{{ f.name_en }}</a></li>
+  {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% if nonprimary_formulas %}
+<div class="detail-section">
+  <h3>{% if primary_formulas %}Also appears in{% else %}Appears in{% endif %}</h3>
+  <ul>
+  {% for f in nonprimary_formulas %}
+    <li><a href="/formula/{{ f.id }}">{{ f.name_en }}</a></li>
+  {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% if related_formulas %}
+<div class="detail-section">
+  <h3>Related</h3>
+  <ul>
+  {% for r in related_formulas %}
+    <li>{{ r.relation_type }}: <a href="/formula/{{ r.id }}">{{ r.name_en }}</a></li>
+  {% endfor %}
+  </ul>
+</div>
 {% endif %}
 
 {% if units %}
-<h3>Units</h3>
-<table border="1" cellpadding="4" cellspacing="0">
-<tr><th></th><th>Symbol</th><th>Unit</th><th>System</th><th>Factor to SI</th></tr>
-{% for u in units %}
-<tr>
-  <td>{% if u.default_unit %}&#x2713;{% endif %}</td>
-  <td>${{ render_symbol(u.symbol) }}$</td>
-  <td>{{ unit_name(u.id) }}</td>
-  <td>{{ u.unit_system or "any" }}</td>
-  <td>&times;{{ u.factor }}{% if u.offset %} + {{ u.offset }}{% endif %}</td>
-</tr>
-{% endfor %}
-</table>
+<div class="detail-section">
+  <h3>Units</h3>
+  <table class="units-table">
+    <thead>
+      <tr>
+        <th>Symbol</th>
+        <th>Unit</th>
+        <th>System</th>
+        <th>Factor to ${{ render_symbol(si_unit_symbol) }}$</th>
+        {% if show_offset %}
+        <th>Offset from ${{ render_symbol(si_unit_symbol) }}$</th>
+        {% endif %}
+      </tr>
+    </thead>
+    <tbody>
+    {% for u in units %}
+      <tr>
+        <td>${{ render_symbol(u.symbol) }}$</td>
+        <td>{{ unit_name(u.id) }}</td>
+        <td>{{ u.unit_system or "any" }}</td>
+        <td>{% if u.factor == 1 %}&ndash;{% else %}&times;{{ u.factor }}{% endif %}</td>
+        {% if show_offset %}
+        <td>{% if u.offset == 0 %}&ndash;{% else %}{{ u.offset }}{% endif %}</td>
+        {% endif %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% endif %}
-
-{% if formulas %}
-<h3>Appears in formulas</h3>
-<ul>
-{% for f in formulas %}
-  <li><a href="/formula/{{ f.id }}">{{ f.name_en }}</a></li>
-{% endfor %}
-</ul>
-{% endif %}
-
-<p><a href="/">&larr; Back to list</a></p>
 
 {% endblock %}
