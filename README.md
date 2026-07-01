@@ -8,24 +8,29 @@ A physics formula database with a CLI tool and web app.
 git clone <repo>
 cd Scifind
 pip install -r requirements.txt
-python formula init       # initialize the database
-python formula init --force  # wipe and re-initialise if it already exists
-python formula list       # browse formulas
 python webapp.py          # start web app at http://localhost:5000
+```
+
+A populated `formulas.db` is included in the repo. The webapp auto-creates
+and seeds the database on first run if it is missing or empty. For the CLI:
+
+```bash
+python scifind_cli.py init --force  # rebuild the database from scratch
+python scifind_cli.py list          # browse formulas
 ```
 
 ## Project Structure
 
 | Path | Purpose |
 | ---- | ------- |
-| `formula` | CLI entry point |
-| `formula_lib.py` | Database, rendering, i18n, import/export |
+| `scifind_cli.py` | CLI entry point |
+| `scifind_lib.py` | Database, rendering, i18n, import/export |
 | `webapp.py` | Flask web application |
+| `formulas.db` | Pre-built database (auto-regenerated on first run if missing) |
 | `schema.sql` | Database schema (6 tables, 3 FTS5 indexes) |
 | `seed.sql` | Core seed data (formulas, quantities, units) |
 | `seed_units.sql` | Additional SI and non-SI units |
 | `seed_formulas.sql` | Extended formulas across sciences |
-| `views.sql` | SQL views for common queries |
 | `sciences.json` | Science/branch/topic tree with translations |
 | `templates/` | Jinja2 templates |
 | `wiki/` | Documentation |

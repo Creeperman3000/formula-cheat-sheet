@@ -13,79 +13,27 @@
           },
           "children": [
             {
-              "id": "rotational_mechanics",
-              "translations": {
-                "en-us": "Rotational mechanics"
-              },
-              "children": [
-                {
-                  "id": "angular_momentum",
-                  "translations": {
-                    "en-us": "Angular Momentum"
-                  }
-                },
-                {
-                  "id": "moment_of_inertia",
-                  "translations": {
-                    "en-us": "Moment Of Inertia"
-                  }
-                },
-                {
-                  "id": "rotational_energy",
-                  "translations": {
-                    "en-us": "Rotational Energy"
-                  }
-                }
-              ]
-            },
-            {
-              "id": "energy",
-              "translations": {
-                "en-us": "Energy"
-              }
-            },
-            {
               "id": "kinematics",
               "translations": {
                 "en-us": "Kinematics"
               },
               "children": [
                 {
-                  "id": "circular_motion",
+                  "id": "constant_acceleration",
                   "translations": {
-                    "en-us": "Circular Motion"
+                    "en-us": "Constant acceleration"
                   }
                 },
                 {
                   "id": "projectile_motion",
                   "translations": {
-                    "en-us": "Projectile Motion"
+                    "en-us": "Projectile motion"
                   }
                 },
                 {
-                  "id": "constant_acceleration",
+                  "id": "circular_motion",
                   "translations": {
-                    "en-us": "Constant Acceleration"
-                  }
-                }
-              ]
-            },
-            {
-              "id": "gravitation",
-              "translations": {
-                "en-us": "Gravitation"
-              },
-              "children": [
-                {
-                  "id": "escape_velocity",
-                  "translations": {
-                    "en-us": "Escape Velocity"
-                  }
-                },
-                {
-                  "id": "newtonian_gravity",
-                  "translations": {
-                    "en-us": "Newtonian gravity"
+                    "en-us": "Circular motion"
                   }
                 }
               ]
@@ -96,6 +44,18 @@
                 "en-us": "Dynamics"
               },
               "children": [
+                {
+                  "id": "newtons_laws",
+                  "translations": {
+                    "en-us": "Newton's laws"
+                  }
+                },
+                {
+                  "id": "forces",
+                  "translations": {
+                    "en-us": "Forces"
+                  }
+                },
                 {
                   "id": "friction",
                   "translations": {
@@ -111,61 +71,15 @@
               ]
             },
             {
-              "id": "momentum",
-              "translations": {
-                "en-us": "Momentum"
-              },
-              "children": [
-                {
-                  "id": "impulse",
-                  "translations": {
-                    "en-us": "Impulse"
-                  }
-                },
-                {
-                  "id": "linear_momentum",
-                  "translations": {
-                    "en-us": "Linear Momentum"
-                  }
-                }
-              ]
-            },
-            {
-              "id": "oscillations_and_waves",
-              "translations": {
-                "en-us": "Oscillations And Waves"
-              },
-              "children": [
-                {
-                  "id": "harmonic_motion",
-                  "translations": {
-                    "en-us": "Harmonic Motion"
-                  }
-                },
-                {
-                  "id": "mechanical_waves",
-                  "translations": {
-                    "en-us": "Mechanical Waves"
-                  }
-                },
-                {
-                  "id": "wave_interference",
-                  "translations": {
-                    "en-us": "Wave Interference"
-                  }
-                }
-              ]
-            },
-            {
               "id": "work_and_energy",
               "translations": {
-                "en-us": "Work And Energy"
+                "en-us": "Work and energy"
               },
               "children": [
                 {
-                  "id": "potential_energy",
+                  "id": "work",
                   "translations": {
-                    "en-us": "Potential Energy"
+                    "en-us": "Work"
                   }
                 },
                 {
@@ -175,24 +89,134 @@
                   }
                 },
                 {
-                  "id": "work",
+                  "id": "kinetic_energy",
                   "translations": {
-                    "en-us": "Work"
+                    "en-us": "Kinetic energy"
+                  }
+                },
+                {
+                  "id": "potential_energy",
+                  "translations": {
+                    "en-us": "Potential energy"
+                  }
+                },
+                {
+                  "id": "conservation_of_energy",
+                  "translations": {
+                    "en-us": "Conservation of energy"
                   }
                 }
               ]
             },
             {
-              "id": "orbital_mechanics",
+              "id": "momentum",
               "translations": {
-                "en-us": "Orbital mechanics"
-              }
+                "en-us": "Momentum"
+              },
+              "children": [
+                {
+                  "id": "linear_momentum",
+                  "translations": {
+                    "en-us": "Linear momentum"
+                  }
+                },
+                {
+                  "id": "impulse",
+                  "translations": {
+                    "en-us": "Impulse"
+                  }
+                },
+                {
+                  "id": "collisions",
+                  "translations": {
+                    "en-us": "Collisions"
+                  }
+                }
+              ]
             },
             {
-              "id": "rotation",
+              "id": "rotational_mechanics",
               "translations": {
-                "en-us": "Rotation"
-              }
+                "en-us": "Rotational mechanics"
+              },
+              "children": [
+                {
+                  "id": "torque",
+                  "translations": {
+                    "en-us": "Torque"
+                  }
+                },
+                {
+                  "id": "angular_momentum",
+                  "translations": {
+                    "en-us": "Angular momentum"
+                  }
+                },
+                {
+                  "id": "moment_of_inertia",
+                  "translations": {
+                    "en-us": "Moment of inertia"
+                  }
+                },
+                {
+                  "id": "rotational_energy",
+                  "translations": {
+                    "en-us": "Rotational energy"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "gravitation",
+              "translations": {
+                "en-us": "Gravitation"
+              },
+              "children": [
+                {
+                  "id": "newtonian_gravity",
+                  "translations": {
+                    "en-us": "Newtonian gravity"
+                  }
+                },
+                {
+                  "id": "orbital_motion",
+                  "translations": {
+                    "en-us": "Orbital motion"
+                  }
+                },
+                {
+                  "id": "escape_velocity",
+                  "translations": {
+                    "en-us": "Escape velocity"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "oscillations_and_waves",
+              "translations": {
+                "en-us": "Oscillations and waves"
+              },
+              "children": [
+                {
+                  "id": "harmonic_motion",
+                  "translations": {
+                    "en-us": "Harmonic motion"
+                  }
+                },
+                {
+                  "id": "mechanical_waves",
+                  "translations": {
+                    "en-us": "Mechanical waves"
+                  }
+                },
+                {
+                  "id": "wave_interference",
+                  "translations": {
+                    "en-us": "Wave interference"
+                  }
+                }
+              ]
             }
           ]
         },
@@ -203,23 +227,17 @@
           },
           "children": [
             {
-              "id": "viscosity",
-              "translations": {
-                "en-us": "Viscosity"
-              }
-            },
-            {
-              "id": "surface_phenomena",
-              "translations": {
-                "en-us": "Surface phenomena"
-              }
-            },
-            {
               "id": "fluid_statics",
               "translations": {
-                "en-us": "Fluid Statics"
+                "en-us": "Fluid statics"
               },
               "children": [
+                {
+                  "id": "pressure",
+                  "translations": {
+                    "en-us": "Pressure"
+                  }
+                },
                 {
                   "id": "buoyancy",
                   "translations": {
@@ -231,31 +249,25 @@
                   "translations": {
                     "en-us": "Pascal's law"
                   }
-                },
-                {
-                  "id": "pressure",
-                  "translations": {
-                    "en-us": "Pressure"
-                  }
                 }
               ]
             },
             {
               "id": "fluid_dynamics",
               "translations": {
-                "en-us": "Fluid Dynamics"
+                "en-us": "Fluid dynamics"
               },
               "children": [
                 {
                   "id": "bernoulli_equation",
                   "translations": {
-                    "en-us": "Bernoulli's equation"
+                    "en-us": "Bernoulli equation"
                   }
                 },
                 {
                   "id": "continuity_equation",
                   "translations": {
-                    "en-us": "Continuity Equation"
+                    "en-us": "Continuity equation"
                   }
                 },
                 {
@@ -269,7 +281,7 @@
             {
               "id": "surface_tension",
               "translations": {
-                "en-us": "Surface Tension"
+                "en-us": "Surface tension"
               }
             }
           ]
@@ -281,39 +293,9 @@
           },
           "children": [
             {
-              "id": "second_law",
+              "id": "temperature",
               "translations": {
-                "en-us": "Second law"
-              }
-            },
-            {
-              "id": "heat_transfer",
-              "translations": {
-                "en-us": "Heat transfer"
-              }
-            },
-            {
-              "id": "continuum_mechanics",
-              "translations": {
-                "en-us": "Continuum mechanics"
-              }
-            },
-            {
-              "id": "first_law",
-              "translations": {
-                "en-us": "First law"
-              }
-            },
-            {
-              "id": "equations_of_state",
-              "translations": {
-                "en-us": "Equations of state"
-              }
-            },
-            {
-              "id": "entropy",
-              "translations": {
-                "en-us": "Entropy"
+                "en-us": "Temperature"
               }
             },
             {
@@ -323,9 +305,39 @@
               }
             },
             {
+              "id": "ideal_gases",
+              "translations": {
+                "en-us": "Ideal gases"
+              }
+            },
+            {
+              "id": "first_law",
+              "translations": {
+                "en-us": "First law"
+              }
+            },
+            {
+              "id": "second_law",
+              "translations": {
+                "en-us": "Second law"
+              }
+            },
+            {
+              "id": "entropy",
+              "translations": {
+                "en-us": "Entropy"
+              }
+            },
+            {
+              "id": "heat_transfer",
+              "translations": {
+                "en-us": "Heat transfer"
+              }
+            },
+            {
               "id": "heat_engines",
               "translations": {
-                "en-us": "Heat Engines"
+                "en-us": "Heat engines"
               }
             }
           ]
@@ -343,6 +355,30 @@
               }
             },
             {
+              "id": "electric_fields",
+              "translations": {
+                "en-us": "Electric fields"
+              }
+            },
+            {
+              "id": "electric_potential",
+              "translations": {
+                "en-us": "Electric potential"
+              }
+            },
+            {
+              "id": "capacitance",
+              "translations": {
+                "en-us": "Capacitance"
+              }
+            },
+            {
+              "id": "current_electricity",
+              "translations": {
+                "en-us": "Current electricity"
+              }
+            },
+            {
               "id": "circuits",
               "translations": {
                 "en-us": "Circuits"
@@ -355,33 +391,15 @@
               }
             },
             {
-              "id": "capacitance",
-              "translations": {
-                "en-us": "Capacitance"
-              }
-            },
-            {
-              "id": "electric_fields",
-              "translations": {
-                "en-us": "Electric Fields"
-              }
-            },
-            {
               "id": "electromagnetic_induction",
               "translations": {
-                "en-us": "Electromagnetic Induction"
+                "en-us": "Electromagnetic induction"
               }
             },
             {
               "id": "electromagnetic_waves",
               "translations": {
-                "en-us": "Electromagnetic Waves"
-              }
-            },
-            {
-              "id": "current_electricity",
-              "translations": {
-                "en-us": "Current Electricity"
+                "en-us": "Electromagnetic waves"
               }
             }
           ]
@@ -393,67 +411,11 @@
           },
           "children": [
             {
-              "id": "photometry",
-              "translations": {
-                "en-us": "Photometry"
-              }
-            },
-            {
-              "id": "waves",
-              "translations": {
-                "en-us": "Waves"
-              }
-            },
-            {
-              "id": "radiometry",
-              "translations": {
-                "en-us": "Radiometry"
-              }
-            },
-            {
-              "id": "physical_optics",
-              "translations": {
-                "en-us": "Physical Optics"
-              },
-              "children": [
-                {
-                  "id": "diffraction",
-                  "translations": {
-                    "en-us": "Diffraction"
-                  }
-                },
-                {
-                  "id": "interference",
-                  "translations": {
-                    "en-us": "Interference"
-                  }
-                },
-                {
-                  "id": "polarization",
-                  "translations": {
-                    "en-us": "Polarization"
-                  }
-                }
-              ]
-            },
-            {
               "id": "geometrical_optics",
               "translations": {
-                "en-us": "Geometrical Optics"
+                "en-us": "Geometrical optics"
               },
               "children": [
-                {
-                  "id": "lenses",
-                  "translations": {
-                    "en-us": "Lenses"
-                  }
-                },
-                {
-                  "id": "mirrors",
-                  "translations": {
-                    "en-us": "Mirrors"
-                  }
-                },
                 {
                   "id": "reflection",
                   "translations": {
@@ -464,6 +426,44 @@
                   "id": "refraction",
                   "translations": {
                     "en-us": "Refraction"
+                  }
+                },
+                {
+                  "id": "mirrors",
+                  "translations": {
+                    "en-us": "Mirrors"
+                  }
+                },
+                {
+                  "id": "lenses",
+                  "translations": {
+                    "en-us": "Lenses"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "physical_optics",
+              "translations": {
+                "en-us": "Physical optics"
+              },
+              "children": [
+                {
+                  "id": "interference",
+                  "translations": {
+                    "en-us": "Interference"
+                  }
+                },
+                {
+                  "id": "diffraction",
+                  "translations": {
+                    "en-us": "Diffraction"
+                  }
+                },
+                {
+                  "id": "polarization",
+                  "translations": {
+                    "en-us": "Polarization"
                   }
                 }
               ]
@@ -477,47 +477,33 @@
           },
           "children": [
             {
-              "id": "nuclear_physics",
-              "translations": {
-                "en-us": "Nuclear physics"
-              },
-              "children": [
-                {
-                  "id": "radioactivity",
-                  "translations": {
-                    "en-us": "Radioactivity"
-                  }
-                },
-                {
-                  "id": "radiation",
-                  "translations": {
-                    "en-us": "Radiation"
-                  }
-                }
-              ]
-            },
-            {
-              "id": "atomic_physics",
-              "translations": {
-                "en-us": "Atomic Physics"
-              }
-            },
-            {
               "id": "relativity",
               "translations": {
                 "en-us": "Relativity"
               }
             },
             {
-              "id": "particle_physics",
+              "id": "quantum_mechanics",
               "translations": {
-                "en-us": "Particle Physics"
+                "en-us": "Quantum mechanics"
               }
             },
             {
-              "id": "quantum_mechanics",
+              "id": "atomic_physics",
               "translations": {
-                "en-us": "Quantum Mechanics"
+                "en-us": "Atomic physics"
+              }
+            },
+            {
+              "id": "nuclear_physics",
+              "translations": {
+                "en-us": "Nuclear physics"
+              }
+            },
+            {
+              "id": "particle_physics",
+              "translations": {
+                "en-us": "Particle physics"
               }
             }
           ]
@@ -531,6 +517,82 @@
       },
       "children": [
         {
+          "id": "arithmetic",
+          "translations": {
+            "en-us": "Arithmetic"
+          }
+        },
+        {
+          "id": "algebra",
+          "translations": {
+            "en-us": "Algebra"
+          },
+          "children": [
+            {
+              "id": "equations",
+              "translations": {
+                "en-us": "Equations"
+              }
+            },
+            {
+              "id": "polynomials",
+              "translations": {
+                "en-us": "Polynomials"
+              }
+            },
+            {
+              "id": "logarithms",
+              "translations": {
+                "en-us": "Logarithms"
+              }
+            },
+            {
+              "id": "exponents",
+              "translations": {
+                "en-us": "Exponents"
+              }
+            }
+          ]
+        },
+        {
+          "id": "geometry",
+          "translations": {
+            "en-us": "Geometry"
+          },
+          "children": [
+            {
+              "id": "plane_geometry",
+              "translations": {
+                "en-us": "Plane geometry"
+              }
+            },
+            {
+              "id": "circles",
+              "translations": {
+                "en-us": "Circles"
+              }
+            },
+            {
+              "id": "triangles",
+              "translations": {
+                "en-us": "Triangles"
+              }
+            },
+            {
+              "id": "polygons",
+              "translations": {
+                "en-us": "Polygons"
+              }
+            },
+            {
+              "id": "coordinate_geometry",
+              "translations": {
+                "en-us": "Coordinate geometry"
+              }
+            }
+          ]
+        },
+        {
           "id": "trigonometry",
           "translations": {
             "en-us": "Trigonometry"
@@ -543,59 +605,15 @@
               }
             },
             {
+              "id": "right_triangles",
+              "translations": {
+                "en-us": "Right triangles"
+              }
+            },
+            {
               "id": "laws_of_sines_and_cosines",
               "translations": {
-                "en-us": "Laws Of Sines And Cosines"
-              }
-            }
-          ]
-        },
-        {
-          "id": "geometry",
-          "translations": {
-            "en-us": "Geometry"
-          },
-          "children": [
-            {
-              "id": "area",
-              "translations": {
-                "en-us": "Area"
-              }
-            },
-            {
-              "id": "circles",
-              "translations": {
-                "en-us": "Circles"
-              }
-            },
-            {
-              "id": "coordinate_geometry",
-              "translations": {
-                "en-us": "Coordinate Geometry"
-              }
-            },
-            {
-              "id": "plane_geometry",
-              "translations": {
-                "en-us": "Plane Geometry"
-              }
-            },
-            {
-              "id": "polygons",
-              "translations": {
-                "en-us": "Polygons"
-              }
-            },
-            {
-              "id": "triangles",
-              "translations": {
-                "en-us": "Triangles"
-              }
-            },
-            {
-              "id": "trigonometry",
-              "translations": {
-                "en-us": "Trigonometry"
+                "en-us": "Laws of sines and cosines"
               }
             }
           ]
@@ -607,15 +625,15 @@
           },
           "children": [
             {
-              "id": "derivatives",
+              "id": "limits",
               "translations": {
-                "en-us": "Derivatives"
+                "en-us": "Limits"
               }
             },
             {
-              "id": "differential_equations",
+              "id": "derivatives",
               "translations": {
-                "en-us": "Differential Equations"
+                "en-us": "Derivatives"
               }
             },
             {
@@ -625,44 +643,30 @@
               }
             },
             {
-              "id": "limits",
+              "id": "differential_equations",
               "translations": {
-                "en-us": "Limits"
+                "en-us": "Differential equations"
               }
             }
           ]
         },
         {
-          "id": "algebra",
+          "id": "linear_algebra",
           "translations": {
-            "en-us": "Algebra"
-          },
-          "children": [
-            {
-              "id": "exponents",
-              "translations": {
-                "en-us": "Exponents"
-              }
-            },
-            {
-              "id": "logarithms",
-              "translations": {
-                "en-us": "Logarithms"
-              }
-            },
-            {
-              "id": "polynomials",
-              "translations": {
-                "en-us": "Polynomials"
-              }
-            },
-            {
-              "id": "equations",
-              "translations": {
-                "en-us": "Equations"
-              }
-            }
-          ]
+            "en-us": "Linear algebra"
+          }
+        },
+        {
+          "id": "probability",
+          "translations": {
+            "en-us": "Probability"
+          }
+        },
+        {
+          "id": "statistics",
+          "translations": {
+            "en-us": "Statistics"
+          }
         }
       ]
     },
@@ -673,83 +677,33 @@
       },
       "children": [
         {
-          "id": "physical_chemistry",
-          "translations": {
-            "en-us": "Physical chemistry"
-          },
-          "children": [
-            {
-              "id": "kinetics",
-              "translations": {
-                "en-us": "Kinetics"
-              }
-            },
-            {
-              "id": "solutions",
-              "translations": {
-                "en-us": "Solutions"
-              }
-            },
-            {
-              "id": "thermochemistry",
-              "translations": {
-                "en-us": "Thermochemistry"
-              }
-            },
-            {
-              "id": "acids_and_bases",
-              "translations": {
-                "en-us": "Acids And Bases"
-              }
-            },
-            {
-              "id": "chemical_equilibrium",
-              "translations": {
-                "en-us": "Chemical Equilibrium"
-              }
-            },
-            {
-              "id": "chemical_kinetics",
-              "translations": {
-                "en-us": "Chemical Kinetics"
-              }
-            },
-            {
-              "id": "electrochemistry",
-              "translations": {
-                "en-us": "Electrochemistry"
-              }
-            }
-          ]
-        },
-        {
           "id": "general_chemistry",
           "translations": {
-            "en-us": "General Chemistry"
+            "en-us": "General chemistry"
           },
           "children": [
             {
               "id": "atomic_structure",
               "translations": {
-                "en-us": "Atomic Structure"
-              }
-            },
-            {
-              "id": "chemical_bonding",
-              "translations": {
-                "en-us": "Chemical Bonding"
-              }
-            },
-            {
-              "id": "chemical_reactions",
-              "translations": {
-                "en-us": "Chemical Reactions"
+                "en-us": "Atomic structure"
               }
             },
             {
               "id": "periodic_table",
               "translations": {
-                "en-us": "Periodic Table"
+                "en-us": "Periodic table"
+              }
+            },
+            {
+              "id": "chemical_bonding",
+              "translations": {
+                "en-us": "Chemical bonding"
+              }
+            },
+            {
+              "id": "chemical_reactions",
+              "translations": {
+                "en-us": "Chemical reactions"
               }
             }
           ]
@@ -761,36 +715,104 @@
           },
           "children": [
             {
-              "id": "limiting_reactants",
-              "translations": {
-                "en-us": "Limiting Reactants"
-              }
-            },
-            {
-              "id": "solution_stoichiometry",
-              "translations": {
-                "en-us": "Solution Stoichiometry"
-              }
-            },
-            {
               "id": "mole_concept",
               "translations": {
-                "en-us": "Mole Concept"
-              }
-            },
-            {
-              "id": "percent_yield",
-              "translations": {
-                "en-us": "Percent Yield"
+                "en-us": "Mole concept"
               }
             },
             {
               "id": "molar_mass",
               "translations": {
-                "en-us": "Molar Mass"
+                "en-us": "Molar mass"
+              }
+            },
+            {
+              "id": "limiting_reactants",
+              "translations": {
+                "en-us": "Limiting reactants"
+              }
+            },
+            {
+              "id": "percent_yield",
+              "translations": {
+                "en-us": "Percent yield"
+              }
+            },
+            {
+              "id": "solution_stoichiometry",
+              "translations": {
+                "en-us": "Solution stoichiometry"
               }
             }
           ]
+        },
+        {
+          "id": "physical_chemistry",
+          "translations": {
+            "en-us": "Physical chemistry"
+          },
+          "children": [
+            {
+              "id": "thermochemistry",
+              "translations": {
+                "en-us": "Thermochemistry"
+              }
+            },
+            {
+              "id": "chemical_kinetics",
+              "translations": {
+                "en-us": "Chemical kinetics"
+              }
+            },
+            {
+              "id": "chemical_equilibrium",
+              "translations": {
+                "en-us": "Chemical equilibrium"
+              }
+            },
+            {
+              "id": "acids_and_bases",
+              "translations": {
+                "en-us": "Acids and bases"
+              }
+            },
+            {
+              "id": "electrochemistry",
+              "translations": {
+                "en-us": "Electrochemistry"
+              }
+            },
+            {
+              "id": "solutions",
+              "translations": {
+                "en-us": "Solutions"
+              }
+            }
+          ]
+        },
+        {
+          "id": "organic_chemistry",
+          "translations": {
+            "en-us": "Organic chemistry"
+          }
+        },
+        {
+          "id": "inorganic_chemistry",
+          "translations": {
+            "en-us": "Inorganic chemistry"
+          }
+        },
+        {
+          "id": "analytical_chemistry",
+          "translations": {
+            "en-us": "Analytical chemistry"
+          }
+        },
+        {
+          "id": "biochemistry",
+          "translations": {
+            "en-us": "Biochemistry"
+          }
         }
       ]
     }

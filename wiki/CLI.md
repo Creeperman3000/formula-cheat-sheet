@@ -1,27 +1,27 @@
 # CLI Tool
 
-Entry point: `python formula` or `./formula`
+Entry point: `python scifind_cli.py` or `./scifind_cli.py`
 
 ## Usage
 
 ```
-python formula <command> [options]
+python scifind_cli.py <command> [options]
 ```
 
 ## Commands
 
 ### `init`
-Initialize the database — runs `schema.sql`, `seed.sql`, `views.sql`, `seed_units.sql`, and `seed_formulas.sql`, then applies migrations and rebuilds FTS indexes.
+Initialize the database — runs `schema.sql`, `seed.sql`, `seed_units.sql`, and `seed_formulas.sql`, then rebuilds the FTS indexes.
 
 ```bash
-python formula init [--db <path>]
+python scifind_cli.py init [--db <path>]
 ```
 
 ### `list`
-List all formulas with branch/topic.
+List all formulas with topic.
 
 ```bash
-python formula list [--branch <name>] [--topic <name>] [--difficulty <min-max>]
+python scifind_cli.py list [--topic <name>] [--difficulty <min-max>]
 ```
 
 ### `show <formula_id>`
@@ -31,14 +31,14 @@ Display a formula with its variables, description, conditions, and related formu
 Full-text search across formula names, descriptions, quantities, and unit names/symbols.
 
 ```bash
-python formula search "kinetic energy"
+python scifind_cli.py search "kinetic energy"
 ```
 
 ### `quantities`
 List all quantities (optionally filtered by formula).
 
 ```bash
-python formula quantities [--formula <id>]
+python scifind_cli.py quantities [--formula <id>]
 ```
 
 ### `quantity <quantity_id>`
@@ -48,24 +48,24 @@ Show quantity details including dimensions and compatible units.
 List all units with their symbols and conversion factors.
 
 ```bash
-python formula units [--quantity <id>]
+python scifind_cli.py units [--quantity <id>]
 ```
 
 ### `browse`
-Interactive tree browser for exploring formulas by branch/topic.
+Tree browser for exploring formulas by topic.
 
 ### `export`
 Export the entire database.
 
 ```bash
-python formula export --format csv|csvdir|xlsx|ods [--output <path>]
+python scifind_cli.py export --format csv|csvdir|xlsx|ods [--output <path>]
 ```
 
 ### `import`
 Import data from file or directory.
 
 ```bash
-python formula import <file_or_directory>
+python scifind_cli.py import <file_or_directory>
 ```
 
 ## Options
@@ -75,7 +75,6 @@ python formula import <file_or_directory>
 | `--db <path>` | Override database path |
 | `--format <fmt>` | Export format (csv, csvdir, xlsx, ods) |
 | `--output <path>` | Export output path |
-| `--branch <name>` | Filter by branch |
 | `--topic <name>` | Filter by topic |
 | `--difficulty <range>` | Difficulty range: N or N-M |
 | `--formula <id>` | Filter by formula ID |

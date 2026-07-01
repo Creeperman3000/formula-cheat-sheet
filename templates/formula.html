@@ -5,15 +5,15 @@
 <h2 class="detail-heading">{{ formula.name_en }}</h2>
 
 <div class="breadcrumb-bar">
-  <a href="/formulas?science={{ formula.science_id }}">{{ formula.science }}</a>
+  <a href="/formulas?ids={{ formula.science_id }}">{{ formula.science }}</a>
   &gt;
-  <a href="/formulas?science={{ formula.science_id }}&amp;branch={{ formula.branch_id }}">{{ formula.branch }}</a>
+  <a href="/formulas?ids={{ formula.branch_id }}">{{ formula.branch }}</a>
   {% if formula.subbranch_id %}
   &gt;
-  <a href="/formulas?science={{ formula.science_id }}&amp;branch={{ formula.branch_id }}&amp;subbranch={{ formula.subbranch_id }}">{{ formula.subbranch }}</a>
+  <a href="/formulas?ids={{ formula.subbranch_id }}">{{ formula.subbranch }}</a>
   {% endif %}
   &gt;
-  <a href="/formulas?science={{ formula.science_id }}&amp;branch={{ formula.branch_id }}&amp;subbranch={{ formula.subbranch_id }}&amp;topic={{ formula.topic_id }}">{{ formula.topic }}</a>
+  <a href="/formulas?ids={{ formula.topic_id }}">{{ formula.topic }}</a>
 </div>
 
 <div class="detail-meta">

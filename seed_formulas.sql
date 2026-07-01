@@ -76,15 +76,9 @@ INSERT OR IGNORE INTO quantity (id, name, symbol, science, branch, subbranch, to
   ('time', '{"en-us": "Time"}', 't', 'physics', 'classical_mechanics', 'kinematics', 'constant_acceleration', 1, 1, '[{"unit": "second", "exponent": 1}]', 0.0,0.0,1.0,0.0,0.0,0.0,0.0),
   ('torque', '{"en-us": "Torque"}', '\tau', 'physics', 'classical_mechanics', 'rotational_mechanics', 'torque', 3, 0, '[{"unit": "newton_metre", "exponent": 1}]', 1.0,2.0,-2.0,0.0,0.0,0.0,0.0),
   ('wavelength', '{"en-us": "Wavelength"}', '\lambda', 'physics', 'classical_mechanics', 'oscillations_and_waves', 'mechanical_waves', 3, 0, '[{"unit": "metre", "exponent": 1}]', 0.0,1.0,0.0,0.0,0.0,0.0,0.0),
-  ('wavenumber', '{"en-us": "Wavenumber"}', '\tilde{\nu}', 'physics', 'optics', NULL, 'waves', 3, 0, '[{"unit": "reciprocal_metre", "exponent": 1}]', 0.0,-1.0,0.0,0.0,0.0,0.0,0.0);
+  ('wavenumber', '{"en-us": "Wavenumber"}', '\tilde{\nu}', 'physics', 'optics', NULL, 'waves', 3, 0, '[{"unit": "metre", "exponent": -1}]', 0.0,-1.0,0.0,0.0,0.0,0.0,0.0);
 
 INSERT OR IGNORE INTO unit (id, name, symbol, quantity_id, default_unit, unit_system, factor, latex_factor, offset) VALUES
-('kilogram_per_mole', '{"en-us": "Kilogram per mole"}', 'kg/mol', 'molar_mass', 1, 'SI', 1.0, NULL, 0.0),
-('kilogram_square_metre', '{"en-us": "Kilogram square metre"}', '\mathrm{kg}\cdot\mathrm{m}^{2}', 'moment_of_inertia', 1, 'SI', 1.0, NULL, 0.0),
-('kilogram_square_metre_per_second', '{"en-us": "Kilogram square metre per second"}', '\mathrm{kg}\cdot\mathrm{m}^{2}/\mathrm{s}', 'angular_momentum', 1, 'SI', 1.0, NULL, 0.0),
-('newton_per_metre_spring', '{"en-us": "Newton per metre"}', '\mathrm{N}/\mathrm{m}', 'spring_constant', 1, 'SI', 1.0, NULL, 0.0),
-('newton_second', '{"en-us": "Newton second"}', '\mathrm{N}\cdot\mathrm{s}', 'impulse', 1, 'SI', 1.0, NULL, 0.0),
-('reciprocal_second', '{"en-us": "Per second"}', '\mathrm{s}^{-1}', 'rate_constant', 1, 'SI', 1.0, NULL, 0.0),
 ('tesla_magnetic_field', '{"en-us": "Tesla"}', '\mathrm{T}', 'magnetic_field', 1, 'SI', 1.0, NULL, 0.0),
 ('wavelength_metre', '{"en-us": "Metre"}', '\mathrm{m}', 'wavelength', 1, 'SI', 1.0, NULL, 0.0);
 
@@ -745,7 +739,3 @@ INSERT OR IGNORE INTO formula_item (formula_id, term, is_primary, sort_order, qu
 
 INSERT OR IGNORE INTO formula_item (formula_id, term, is_primary, sort_order, quantity_id, var_exponent) VALUES
   ('work_formula', 1, 1, 0, 'work', -1.0);
-
--- Fix pre-existing wrong data from seed.sql (length had dim_M=1, dim_L=0; symbol was 's' not 'l')
-UPDATE quantity SET dim_M = 0.0, dim_L = 1.0, symbol = 'l'
-WHERE id = 'length' AND (dim_M != 0.0 OR dim_L != 1.0 OR symbol != 'l');

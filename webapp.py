@@ -1,138 +1,330 @@
 #!/usr/bin/env python3
-"""Flask webapp for Scifind — a structured physics formula database."""
+"""Scifind web app — Flask interface to the formula database."""
 
-import copy
-import html
+import html as html_module
+import hmac
 import io
 import json
+import logging
 import os
 import re
+import secrets
+import sqlite3
 import sys
 import tempfile
 import zipfile
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from flask import Flask, render_template, request, g, Response, redirect, session, flash
 from markupsafe import Markup
 
-_project_dir = Path(__file__).resolve().parent
-if str(_project_dir) not in sys.path:
-    sys.path.insert(0, str(_project_dir))
+_PROJECT_DIR = Path(__file__).resolve().parent
+if str(_PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_DIR))
 
-from formula_lib import (
-    get_conn, render_formula_items, render_dimensions_latex,
-    render_default_unit_html, render_default_unit_symbol,
-    render_unit_decomposition, is_composite_unit, get_dim_var_ids,
-    get_formula_detail, get_formula_items,
-    get_formula_conditions, get_formula_relations, get_formula_quantities,
-    get_quantity_detail, get_quantity_units,
-    get_quantity_formulas_split, get_formula_primary_dimensions,
-    get_formula_dimension_map, get_formulas_containing_any_quantities, get_formulas_containing_all_quantities,
-    get_si_unit_symbol, get_quantity_related_formulas,
-    get_unit_detail, get_dimension_symbol_maps,
-    get_all_quantities, get_all_formulas,
-    search, migrate_db,
-    export_csv_dir, export_xlsx, export_ods,
-    import_csv, import_csv_dir, import_xlsx, import_ods, rebuild_fts,
-    en as locale_en,
-    load_sciences_tree, tl,
-    DIM_ORDER,
+from scifind_lib import (
+    open_database,
+    database_path,
+    render_formula_items,
+    format_dimensions_latex,
+    format_default_unit_html,
+    format_default_unit_symbol,
+    localise,
+    fetch_formula,
+    fetch_formula_items,
+    fetch_formula_conditions,
+    fetch_formula_related,
+    fetch_formula_quantities,
+    fetch_quantity,
+    fetch_quantity_units,
+    fetch_quantity_formulas_by_side,
+    fetch_quantity_related_formulas,
+    compute_formula_dimensions,
+    compute_all_formula_dimensions,
+    fetch_formulas_with_all_quantities,
+    fetch_formulas_with_any_quantity,
+    fetch_si_unit_symbol,
+    fetch_unit,
+    build_dimension_symbol_maps,
+    fetch_all_quantities,
+    fetch_all_formulas,
+    search_database,
+    rebuild_search_indexes,
+    export_to_csv_directory,
+    export_to_xlsx,
+    export_to_ods,
+    import_from_csv,
+    import_from_csv_directory,
+    import_from_xlsx,
+    import_from_ods,
+    DIMENSION_SYMBOLS,
 )
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24).hex()
+app.secret_key = os.environ.get("SCIFIND_SECRET_KEY") or secrets.token_hex(24)
+app.config["MAX_CONTENT_LENGTH"] = (
+    int(os.environ.get("SCIFIND_MAX_UPLOAD_MB", "32")) * 1024 * 1024
+)
 
-_db_migrated = False
+IMPORT_TOKEN = os.environ.get("SCIFIND_IMPORT_TOKEN", "")
 
-_dim_var_latex_map = None
-_dim_unit_symbol_map = None
-_dim_latex_map = None
+MIN_DIFFICULTY = 0
+MAX_DIFFICULTY = 10
+SEARCH_QUERY_MAX_LENGTH = 200
 
-
-def _ensure_dim_caches():
-    """Initialize dimension caches keyed by dim_sym (M,L,T,I,Θ,N,J)."""
-    global _dim_var_latex_map, _dim_unit_symbol_map, _dim_latex_map
-    if _dim_var_latex_map is None:
-        _dim_var_latex_map = {}
-        _dim_unit_symbol_map = {}
-        _dim_latex_map = {}
-        db = get_db()
-        for dim_sym, qid in get_dim_var_ids(db).items():
-            # var mode from quantity.symbol
-            row = db.execute("SELECT symbol, default_unit FROM quantity WHERE id=?", (qid,)).fetchone()
-            if row:
-                sym = row["symbol"]
-                if sym.startswith("\\"):
-                    _dim_var_latex_map[dim_sym] = sym
-                else:
-                    _dim_var_latex_map[dim_sym] = f"\\mathrm{{{sym}}}"
-            # unit mode: parse default_unit JSON to find the first unit's symbol
-            unit_sym = None
-            if row and row["default_unit"]:
-                try:
-                    du = json.loads(row["default_unit"])
-                    if isinstance(du, list) and du:
-                        uid = du[0].get("unit", "")
-                        if uid:
-                            urow = db.execute("SELECT symbol FROM unit WHERE id=?", (uid,)).fetchone()
-                            if urow:
-                                unit_sym = urow["symbol"]
-                except (ValueError, TypeError, IndexError):
-                    pass
-            if unit_sym:
-                if not unit_sym.startswith("\\"):
-                    unit_sym = f"\\mathrm{{{unit_sym}}}"
-                _dim_unit_symbol_map[dim_sym] = unit_sym
-            # dim mode from quantity.symbol_overwrite["dim"]
-            ow = db.execute("SELECT symbol_overwrite FROM quantity WHERE id=?", (qid,)).fetchone()
-            dim_sym_val = None
-            if ow and ow["symbol_overwrite"]:
-                try:
-                    parsed = json.loads(ow["symbol_overwrite"])
-                    dim_sym_val = parsed.get("dim")
-                except (ValueError, TypeError):
-                    pass
-            if dim_sym_val:
-                ds = dim_sym_val
-                if not ds.startswith("\\"):
-                    ds = f"\\mathrm{{{ds}}}"
-                _dim_latex_map[dim_sym] = ds
-            else:
-                _dim_latex_map[dim_sym] = f"\\mathrm{{{dim_sym}}}"
+logger = logging.getLogger("scifind")
 
 
-# Sciences JSON cache
-_sciences_tree_cache = None
-def _get_sciences_tree():
-    global _sciences_tree_cache
-    if _sciences_tree_cache is None:
+# ---------------------------------------------------------------------------
+# Filter parsing
+# ---------------------------------------------------------------------------
+
+@dataclass
+class FilterState:
+    ids: list = field(default_factory=list)
+    ids_provided: bool = False
+    exclude_all: bool = False
+    quantity_ids: list = field(default_factory=list)
+    quantity_mode: str = "and"
+    diff_min: int = MIN_DIFFICULTY
+    diff_max: int = MAX_DIFFICULTY
+    dimension_filter: dict = field(default_factory=dict)
+    base_quantity_only: int = 0
+
+    @property
+    def has_dimension_filter(self) -> bool:
+        return any(d.get("val") is not None for d in self.dimension_filter.values())
+
+
+def _safe_int(value, default=None):
+    if value is None or value == "":
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _csv_list(value):
+    """Split a comma-separated query value into a list of stripped non-empty parts."""
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def parse_filter_state(args) -> FilterState:
+    dimension_filter = {}
+    for symbol in DIMENSION_SYMBOLS:
+        op = args.get(f"{symbol}_o", "eq")
+        if op not in ("eq", "gte", "lte"):
+            op = "eq"
+        dimension_filter[symbol] = {"op": op, "val": _safe_int(args.get(f"{symbol}_v"))}
+
+    quantity_mode = args.get("qty_mode", "and")
+    if quantity_mode not in ("and", "or"):
+        quantity_mode = "and"
+
+    ids_raw = args.get("ids")
+    return FilterState(
+        ids=_csv_list(ids_raw) if ids_raw is not None else [],
+        ids_provided=ids_raw is not None,
+        exclude_all=args.get("exclude_all") == "1",
+        quantity_ids=_csv_list(args.get("qty", "")),
+        quantity_mode=quantity_mode,
+        diff_min=_safe_int(args.get("diff_min"), MIN_DIFFICULTY),
+        diff_max=_safe_int(args.get("diff_max"), MAX_DIFFICULTY),
+        dimension_filter=dimension_filter,
+        base_quantity_only=_safe_int(args.get("is_dim"), 0) or 0,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Science tree helpers
+# ---------------------------------------------------------------------------
+
+SCIENCES_PATH = _PROJECT_DIR / "sciences.json"
+_tree_cache = None
+
+
+def _sciences_tree():
+    global _tree_cache
+    if _tree_cache is None:
         try:
-            _sciences_tree_cache = load_sciences_tree()
-        except Exception:
-            _sciences_tree_cache = []
-    return _sciences_tree_cache
+            with open(SCIENCES_PATH) as f:
+                _tree_cache = json.load(f).get("sciences", [])
+        except (OSError, ValueError) as exc:
+            logger.warning("Failed to load sciences.json: %s", exc)
+            _tree_cache = []
+    return _tree_cache
 
 
-def _apply_locale(items, locale):
-    """Apply locale to sciences tree items. Returns a new deep-copied tree."""
-    result = copy.deepcopy(items)
-    for item in result:
-        item["_name"] = tl(item.get("translations", {}), locale)
-        for child in item.get("children", []):
-            child["_name"] = tl(child.get("translations", {}), locale)
-            for sub in child.get("children", []):
-                sub["_name"] = tl(sub.get("translations", {}), locale)
-                if isinstance(sub, dict) and "children" in sub and sub["children"]:
-                    for topic in sub["children"]:
-                        topic["_name"] = tl(topic.get("translations", {}), locale)
-    return result
+def _all_ids(tree):
+    """Return every id anywhere in the sciences tree."""
+    out = set()
+    def walk(node):
+        out.add(node["id"])
+        for child in (node.get("children") or []):
+            walk(child)
+    for root in tree:
+        walk(root)
+    return out
 
 
-def _get_science_ids_from_params(params_science):
-    """Parse science param into list of IDs."""
-    if not params_science or params_science == '_none_':
-        return []
-    return [s.strip() for s in params_science.split(",") if s.strip()]
+def _leaf_ids(node):
+    """Return every leaf id under a node (a leaf has no children)."""
+    if not node.get("children"):
+        return {node["id"]}
+    leaves = set()
+    for child in node["children"]:
+        leaves |= _leaf_ids(child)
+    return leaves
+
+
+def _all_descendant_ids(node):
+    """Return all descendant node ids including the node itself."""
+    ids = {node["id"]}
+    for child in (node.get("children") or []):
+        ids |= _all_descendant_ids(child)
+    return ids
+
+
+def _expand_to_topics(tree, ids):
+    """Expand a set of tree-level ids to all leaf ids they cover.
+
+    Unknown ids in the input are silently dropped.
+    """
+    idset = set(ids)
+    covered = set()
+
+    def walk(node):
+        nonlocal covered
+        if node["id"] in idset:
+            covered |= _all_descendant_ids(node)
+            return
+        for child in (node.get("children") or []):
+            walk(child)
+
+    for root in tree:
+        walk(root)
+    return covered
+
+
+def _compress_selection(tree, ids):
+    """Replace a set of leaf ids with the minimal ancestor covering set."""
+    idset = set(ids)
+    covered_leaves = set()
+
+    def gather(node):
+        nonlocal covered_leaves
+        if node["id"] in idset:
+            covered_leaves |= _leaf_ids(node)
+            return
+        for child in (node.get("children") or []):
+            gather(child)
+
+    for root in tree:
+        gather(root)
+
+    out = set()
+
+    def collapse(node):
+        nonlocal out
+        leaves = _leaf_ids(node)
+        if leaves <= covered_leaves:
+            out.add(node["id"])
+            return
+        for child in (node.get("children") or []):
+            collapse(child)
+
+    for root in tree:
+        collapse(root)
+    return out
+
+
+def _tree_name_map(tree, locale):
+    """Flatten (id → localised name) using the current locale."""
+    out = {}
+    def walk(node):
+        out[node["id"]] = localise(
+            node.get("translations") or {}, locale, default=node["id"],
+        )
+        for child in (node.get("children") or []):
+            walk(child)
+    for root in tree:
+        walk(root)
+    return out
+
+
+def _topic_path(tree, topic):
+    """Return the ids along the path to a topic, or None if not in the tree."""
+    def find(node, ancestors=()):
+        if node["id"] == topic:
+            return ancestors + (topic,)
+        for child in (node.get("children") or []):
+            result = find(child, ancestors + (node["id"],))
+            if result:
+                return result
+    for root in tree:
+        result = find(root)
+        if result:
+            return result
+    return None
+
+
+def _jstree_data(tree, name_map, compressed, exclude_all=False, ids_provided=False):
+    """Build JSON for the sidebar's jsTree widget."""
+    if not compressed and not exclude_all and not ids_provided:
+        compressed = {r["id"] for r in tree} if tree else set()
+    def conv(node):
+        return {
+            "id": node["id"],
+            "text": name_map.get(node["id"], node["id"]),
+            "state": {"checked": node["id"] in compressed, "opened": True},
+            "children": [conv(c) for c in (node.get("children") or [])],
+        }
+    return [conv(r) for r in tree] if tree else []
+
+
+def _attach_breadcrumbs(row, locale):
+    """Add science/branch/subbranch/topic ids and names to a row."""
+    tree = _sciences_tree()
+    name_map = _tree_name_map(tree, locale)
+    topic = row.get("topic_id") or row.get("topic")
+    path = _topic_path(tree, topic)
+    if path:
+        levels = list(path) + [None] * (4 - len(path))
+    else:
+        levels = [None] * 4
+    row["science_id"] = levels[0] or ""
+    row["branch_id"] = levels[1] or ""
+    row["subbranch_id"] = levels[2] or ""
+    row["topic_id"] = levels[3] or topic or ""
+    row["science"] = name_map.get(levels[0], "") if levels[0] else ""
+    row["branch"] = name_map.get(levels[1], "") if levels[1] else ""
+    row["subbranch"] = name_map.get(levels[2], "") if levels[2] else ""
+    row["topic"] = name_map.get(levels[3] or topic, "") if (levels[3] or topic) else ""
+    return row
+
+
+def _filtered_ids_for_query(tree, ids):
+    """Convert a set of tree-level ids into the full set of leaf topic ids."""
+    valid = [i for i in ids if i in _all_ids(tree)]
+    return _expand_to_topics(tree, valid)
+
+
+# ---------------------------------------------------------------------------
+# Heading text
+# ---------------------------------------------------------------------------
+
+SUPERSCRIPT_DIGITS = str.maketrans("0123456789-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻")
+
+import unicodeit as _unicodeit
+
+_LATEX_MATHCAL_RE = re.compile(r"\\(?:mathrm|text)\{([^}]*)\}")
+
+
+def _latex_to_unicode(text):
+    text = _LATEX_MATHCAL_RE.sub(r"\1", text)
+    return _unicodeit.replace(text)
 
 
 def _join_names(names):
@@ -145,151 +337,62 @@ def _join_names(names):
     return f"{', '.join(names[:-1])} and {names[-1]}"
 
 
-def _strip_latex(s):
-    """Remove LaTeX markup for plain-text display, converting subscripts to unicode."""
-    s = re.sub(r'\\[a-zA-Z]+\{([^}]*)\}', r'\1', s)
-    SUB_MAP = str.maketrans({
-        '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
-        '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉',
-        'a': 'ₐ', 'e': 'ₑ', 'h': 'ₕ', 'i': 'ᵢ', 'j': 'ⱼ',
-        'k': 'ₖ', 'l': 'ₗ', 'm': 'ₘ', 'n': 'ₙ', 'o': 'ₒ',
-        'p': 'ₚ', 'r': 'ᵣ', 's': 'ₛ', 't': 'ₜ', 'u': 'ᵤ',
-        'v': 'ᵥ', 'x': 'ₓ',
-    })
-    def _sub_brace(m):
-        inner = m.group(1)
-        return inner.translate(SUB_MAP) if inner else ''
-    def _sub_char(m):
-        return m.group(1).translate(SUB_MAP)
-    s = re.sub(r'_\{([^}]*)\}', _sub_brace, s)
-    s = re.sub(r'_(\w)', _sub_char, s)
-    return s
-
-
-def _make_heading(view, science_ids, branch_ids, subbranch_ids, topic_ids,
-                  diff_min, diff_max, locale, tree,
-                  dim_filter=None, dim_symbol_map=None, dim_unit_symbol_map=None,
-                  dim_var_symbol_map=None, active_qty_names=None,
-                  force_var_left=False):
-    """Generate page heading with all active filters."""
-    view_label = view.capitalize()
-
-    # Collect all named filter items (sciences, branches, subbranches, topics)
-    filter_items = []
-    seen = set()
-    for sid in (science_ids or []):
-        name = _get_science_name(sid, locale)
-        if name and name not in seen:
-            filter_items.append(name)
-            seen.add(name)
-    for s in tree:
-        for b in s.get("children", []):
-            bid = b["id"]
-            if bid in (branch_ids or []) and bid not in seen:
-                filter_items.append(tl(b.get("translations", {}), locale))
-                seen.add(bid)
-            for c in b.get("children", []):
-                cid = c["id"]
-                if isinstance(c, dict) and "children" in c and c["children"]:
-                    if cid in (subbranch_ids or []) and cid not in seen:
-                        filter_items.append(tl(c.get("translations", {}), locale))
-                        seen.add(cid)
-                    for t in c.get("children", []):
-                        if t["id"] in (topic_ids or []) and t["id"] not in seen:
-                            filter_items.append(tl(t.get("translations", {}), locale))
-                            seen.add(t["id"])
-                else:
-                    if cid in (topic_ids or []) and cid not in seen:
-                        filter_items.append(tl(c.get("translations", {}), locale))
-                        seen.add(cid)
-
+def _heading_from_compressed(view_label, compressed, name_map, locale, fs,
+                             dim_mode="dim", dimension_caches=None,
+                             active_quantity_names=None):
+    """Render the page heading from a compressed selection set."""
     parts = [view_label]
+    tree = _sciences_tree()
+    order = {}
+    counter = [0]
 
-    if filter_items:
-        parts.append(f"from {_join_names(filter_items)}")
+    def index(node):
+        order[node["id"]] = counter[0]
+        counter[0] += 1
+        for child in (node.get("children") or []):
+            index(child)
 
-    # Collect all non-tree filter descriptions
-    extra_parts = []
+    for root in tree:
+        index(root)
 
-    # Dimension info — add each dimension individually to extra_parts
-    if dim_filter:
-        _sup = str.maketrans('0123456789', '⁰¹²³⁴⁵⁶⁷⁸⁹')
-        for dsym in DIM_ORDER:
-            df = dim_filter.get(dsym, {})
-            v = df.get("val")
-            if v is not None and v != 0:
-                left_map = (dim_var_symbol_map if force_var_left else dim_symbol_map) or {}
-                var_sym = _strip_latex(left_map.get(dsym, dsym))
-                unit_sym = _strip_latex((dim_unit_symbol_map or {}).get(dsym, dsym))
-                exp_str = f"{'⁻' if v < 0 else ''}{str(abs(v)).translate(_sup)}"
-                if dim_unit_symbol_map and unit_sym:
-                    extra_parts.append(f"{var_sym} = {unit_sym}{exp_str}")
-                else:
-                    extra_parts.append(f"{var_sym}{exp_str}")
+    seen = set()
+    names = []
+    for nid in sorted(compressed, key=lambda x: order.get(x, 9 ** 9)):
+        n = name_map.get(nid, nid)
+        if n not in seen:
+            names.append(n)
+            seen.add(n)
+    if names:
+        parts.append(f"from {_join_names(names)}")
 
-    # Quantity info
-    if active_qty_names:
-        extra_parts.append(_join_names(active_qty_names))
+    dim_caches = dimension_caches or {}
+    x_map = dim_caches.get("var" if dim_mode == "unit" else dim_mode, {})
+    y_map = dim_caches.get("unit", {})
 
-    # Difficulty info
-    has_diff = diff_min > 0 or diff_max < 10
-    if has_diff:
-        if diff_min == diff_max:
-            extra_parts.append(f"difficulty {diff_min}")
+    op_syms = {"eq": "=", "gte": "\u2265", "lte": "\u2264"}
+
+    extra = []
+    for symbol in DIMENSION_SYMBOLS:
+        d = fs.dimension_filter.get(symbol, {})
+        value = d.get("val")
+        if value is None:
+            continue
+        op = d.get("op", "eq")
+        x_sym = _latex_to_unicode(x_map.get(symbol, symbol))
+        y_sym = _latex_to_unicode(y_map.get(symbol, symbol))
+        dv = str(value).translate(SUPERSCRIPT_DIGITS)
+        extra.append(f"{x_sym} {op_syms[op]} {y_sym}{dv}")
+    if active_quantity_names:
+        extra.append(_join_names(active_quantity_names))
+    if fs.diff_min > MIN_DIFFICULTY or fs.diff_max < MAX_DIFFICULTY:
+        if fs.diff_min == fs.diff_max:
+            extra.append(f"difficulty {fs.diff_min}")
         else:
-            extra_parts.append(f"difficulty {diff_min}\u2013{diff_max}")
-
-    if extra_parts:
-        parts.append("with " + _join_names(extra_parts))
-
-    result = " ".join(parts)
-    return result[0].upper() + result[1:] if result else f"All {view_label}"
-
-
-
-def _get_science_name(science_id, locale):
-    """Get localized science name from JSON tree."""
-    tree = _get_sciences_tree()
-    for s in tree:
-        if s["id"] == science_id:
-            return tl(s.get("translations", {}), locale)
-    return science_id
-
-
-def _get_branch_name(branch_id, locale="en-us"):
-    """Get localized branch name from JSON tree by ID."""
-    tree = _get_sciences_tree()
-    for s in tree:
-        for child in s.get("children", []):
-            if child["id"] == branch_id:
-                return tl(child.get("translations", {}), locale)
-    return branch_id
-
-
-def _get_topic_name(topic_id, locale="en-us"):
-    """Get localized topic name from JSON tree by ID."""
-    tree = _get_sciences_tree()
-    for s in tree:
-        for child in s.get("children", []):
-            for c in child.get("children", []):
-                if isinstance(c, dict) and "children" in c and c["children"]:
-                    for topic in c["children"]:
-                        if topic["id"] == topic_id:
-                            return tl(topic.get("translations", {}), locale)
-                else:
-                    if c["id"] == topic_id:
-                        return tl(c.get("translations", {}), locale)
-    return topic_id
-
-
-def _get_subbranch_name(subbranch_id, locale="en-us"):
-    tree = _get_sciences_tree()
-    for s in tree:
-        for child in s.get("children", []):
-            for sub in child.get("children", []):
-                if sub["id"] == subbranch_id:
-                    return tl(sub.get("translations", {}), locale)
-    return subbranch_id
+            extra.append(f"difficulty {fs.diff_min}\u2013{fs.diff_max}")
+    if extra:
+        parts.append("with " + _join_names(extra))
+    text = " ".join(parts)
+    return text[0].upper() + text[1:] if text else f"All {view_label}"
 
 
 # ---------------------------------------------------------------------------
@@ -313,56 +416,51 @@ def detect_locale():
     g.dim_mode = session.get("dim_mode", "dim")
 
 
-@app.template_global()
-def locale_text(data):
-    if not data:
-        return ""
+# ---------------------------------------------------------------------------
+# Database lifecycle
+# ---------------------------------------------------------------------------
+
+_NOT_INITIALISED = (
+    "<h1>Database not initialised</h1>"
+    "<p>The SQLite database at <code>{}</code> could not be opened or has no tables.</p>"
+    "<p>Run <code>python scifind_cli.py init</code> to create and seed it, "
+    "then refresh this page.</p>"
+)
+
+
+def _database_is_initialised(db):
     try:
-        d = json.loads(data)
-        val = d.get(g.locale) or d.get("en-us") or data
-        return val
-    except (json.JSONDecodeError, TypeError):
-        return str(data)
+        row = db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='formula'"
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return False
+    return bool(row)
 
 
-def _l(row, locale, *fields):
-    r = dict(row)
-    if locale == "en-us":
-        return r
-    for f in fields:
-        raw = r.get(f)
-        if raw and isinstance(raw, str) and (raw.startswith("{") or raw.startswith('"')):
-            r[f"{f}_en"] = locale_en(raw, locale)
-    return r
+def _bootstrap_database():
+    """Apply schema and seed data on first run when the DB has no tables."""
+    conn = open_database()
+    try:
+        if _database_is_initialised(conn):
+            return
+        conn.executescript((_PROJECT_DIR / "schema.sql").read_text(encoding="utf-8"))
+        for seed in ("seed.sql", "seed_units.sql", "seed_formulas.sql"):
+            conn.executescript((_PROJECT_DIR / seed).read_text(encoding="utf-8"))
+        rebuild_search_indexes(conn)
+        conn.commit()
+        logger.info("Database initialised at %s", database_path())
+    finally:
+        conn.close()
 
 
-def _unit_name_map(db, locale):
-    cache_key = "_unit_names_" + locale
-    if hasattr(g, cache_key):
-        return getattr(g, cache_key)
-    rows = db.execute("SELECT id, name FROM unit").fetchall()
-    result = {r["id"]: locale_en(r["name"], locale) for r in rows}
-    setattr(g, cache_key, result)
-    return result
-
-
-def _unit_symbol_map(db):
-    cache_key = "_unit_symbols"
-    if hasattr(g, cache_key):
-        return getattr(g, cache_key)
-    rows = db.execute("SELECT id, symbol FROM unit").fetchall()
-    result = {r["id"]: r["symbol"] for r in rows}
-    setattr(g, cache_key, result)
-    return result
+# Run once at import time so a fresh clone just works.
+_bootstrap_database()
 
 
 def get_db():
-    global _db_migrated
     if "db" not in g:
-        g.db = get_conn()
-        if not _db_migrated:
-            migrate_db(g.db)
-            _db_migrated = True
+        g.db = open_database()
     return g.db
 
 
@@ -373,48 +471,64 @@ def close_db(exc):
         db.close()
 
 
+@app.before_request
+def ensure_db_open():
+    if request.endpoint in (None, "static"):
+        return
+    try:
+        db = get_db()
+    except sqlite3.DatabaseError as exc:
+        logger.warning("Database open failed: %s", exc)
+        return _NOT_INITIALISED.format(
+            os.environ.get("FORMULA_DB", "formulas.db")
+        ), 503
+    if not _database_is_initialised(db):
+        return _NOT_INITIALISED.format(
+            os.environ.get("FORMULA_DB", "formulas.db")
+        ), 503
+
+
 # ---------------------------------------------------------------------------
 # Template globals
 # ---------------------------------------------------------------------------
 
 @app.template_global()
+def locale_text(data):
+    loc = g.locale if hasattr(g, "locale") else "en-us"
+    return localise(data, loc)
+
+
+def _unit_name_map(db, locale):
+    """Build {unit_id: localised_name} from the current DB."""
+    rows = db.execute("SELECT id, name FROM unit").fetchall()
+    return {r["id"]: localise(r["name"], locale) for r in rows}
+
+
+def _unit_symbol_map(db):
+    """Build {unit_id: symbol} from the current DB."""
+    rows = db.execute("SELECT id, symbol FROM unit").fetchall()
+    return {r["id"]: r["symbol"] for r in rows}
+
+
+@app.template_global()
 def unit_name(unit_id):
     loc = g.locale if hasattr(g, "locale") else "en-us"
-    names = _unit_name_map(g.db, loc) if "db" in g else _unit_name_map(get_db(), loc)
+    db = g.db if "db" in g else get_db()
+    names = _unit_name_map(db, loc)
     if unit_id in names:
-        return Markup(f'<a href="/unit/{html.escape(unit_id)}">{html.escape(names[unit_id])}</a>')
-    return Markup(render_unit_decomposition(
-        unit_id,
-        name_func=lambda uid: names.get(uid, uid.replace("_", " ").title()),
-        url_func=lambda uid: f"/unit/{uid}",
-        locale=loc,
-    ))
-
-
-_SYMBOL_MATH = {
-    "\\newton": "\\mathrm{N}", "\\ohm": "\\mathrm{\\Omega}",
-    "\\degreeCelsius": "\\mathrm{^{\\circ}C}", "\\celsius": "\\mathrm{^{\\circ}C}",
-    "\\meter": "\\mathrm{m}", "\\metre": "\\mathrm{m}",
-    "\\kilogram": "\\mathrm{kg}", "\\kilogramme": "\\mathrm{kg}",
-    "\\second": "\\mathrm{s}", "\\kelvin": "\\mathrm{K}",
-    "\\gram": "\\mathrm{g}", "\\ampere": "\\mathrm{A}",
-    "\\mole": "\\mathrm{mol}", "\\candela": "\\mathrm{cd}",
-    "\\hertz": "\\mathrm{Hz}",
-    "\\text{\\textdegree C}": "\\mathrm{^{\\circ}C}",
-    "\\Omega": "\\mathrm{\\Omega}",
-}
+        return Markup(f'<a href="/unit/{html_module.escape(unit_id)}">{html_module.escape(names[unit_id])}</a>')
+    return Markup(html_module.escape(unit_id.replace("_", " ").title()))
 
 
 @app.template_global()
 def render_symbol(symbol):
+    """Wrap a bare unit symbol in \\mathrm{}. Pass LaTeX strings through unchanged."""
     if not symbol:
         return ""
     s = symbol.strip()
-    if s in _SYMBOL_MATH:
-        return _SYMBOL_MATH[s]
-    if s.startswith("\\mathrm{") or s.startswith("\\") or s.startswith("{}"):
+    if not s or "\\" in s:
         return s
-    return "\\mathrm{" + html.escape(s) + "}"
+    return re.sub(r"[A-Za-z]+", lambda m: f"\\mathrm{{{m.group(0)}}}", s)
 
 
 # ---------------------------------------------------------------------------
@@ -424,84 +538,71 @@ def render_symbol(symbol):
 @app.context_processor
 def inject_globals():
     locale = g.get("locale", "en-us")
-    tree = _apply_locale(_get_sciences_tree(), locale)
-    sciences_param = request.args.get("science", "")
-    active_science_ids = _get_science_ids_from_params(sciences_param)
-    branches_param = request.args.get("branch", "")
-    active_branch_ids = branches_param.split(",") if branches_param else []
-    subbranches_param = request.args.get("subbranch", "")
-    active_subbranch_ids = subbranches_param.split(",") if subbranches_param else []
-    topics_param = request.args.get("topic", "")
-    active_topic_ids = topics_param.split(",") if topics_param else []
-    diff_min = request.args.get("diff_min", 0, type=int)
-    diff_max = request.args.get("diff_max", 10, type=int)
+    fs = parse_filter_state(request.args)
+    tree = _sciences_tree()
+    name_map = _tree_name_map(tree, locale)
+    compressed = _compress_selection(tree, fs.ids)
+    tree_json = _jstree_data(tree, name_map, compressed, fs.exclude_all, ids_provided=fs.ids_provided)
     path = request.path
-    current_view = "quantities" if path in ("/quantities", "/base-units") or path.startswith("/quantity/") or path.startswith("/unit/") else "formulas"
+    current_view = (
+        "quantities"
+        if path == "/quantities" or path.startswith("/quantity/") or path.startswith("/unit/")
+        else "formulas"
+    )
 
-    # Dimension filter state
-    dim_filter = {}
-    for dsym in DIM_ORDER:
-        op = request.args.get(f"dim_{dsym}_op", "eq")
-        val = request.args.get(f"dim_{dsym}_val", None, type=int)
-        dim_filter[dsym] = {"op": op if op in ("eq", "gte", "lte") else "eq", "val": val}
-
-    # Quantity filter state
-    qty_param = request.args.get("qty", "")
-    active_qty_ids = qty_param.split(",") if qty_param else []
-
-    # Pass all quantities for the filter checkboxes
     all_quantities_for_filter = []
+    dimension_caches = {"var": {}, "unit": {}, "dim": {}}
+    db = None
     try:
         db = get_db()
-        raw_qs = get_all_quantities(db)
-        for q in raw_qs:
-            raw_name = q["name"]
-            display_name = q["id"]
-            if raw_name:
-                if isinstance(raw_name, str) and raw_name.startswith("{"):
-                    try:
-                        parsed = json.loads(raw_name)
-                        display_name = parsed.get(locale) or parsed.get("en-us") or q["id"]
-                    except (ValueError, TypeError):
-                        display_name = raw_name
-                else:
-                    display_name = raw_name
-            all_quantities_for_filter.append({
-                "id": q["id"],
-                "name": display_name,
-                "symbol": q["symbol"] if q["symbol"] else "",
-            })
-    except Exception:
-        pass
+    except sqlite3.OperationalError as exc:
+        logger.warning("Database unavailable: %s", exc)
+    if db is not None:
+        try:
+            for q in fetch_all_quantities(db):
+                all_quantities_for_filter.append({
+                    "id": q["id"],
+                    "name": localise(q["name"], locale, default=q["id"]),
+                    "symbol": q["symbol"] or "",
+                })
+        except sqlite3.OperationalError as exc:
+            logger.warning("Quantity table unavailable: %s", exc)
+        try:
+            var_map, unit_map, dim_map = build_dimension_symbol_maps(db)
+            dimension_caches = {"var": var_map, "unit": unit_map, "dim": dim_map}
+        except sqlite3.OperationalError as exc:
+            logger.warning("Dimension symbol lookup failed: %s", exc)
 
-    dim_var_map, dim_unit_map, dim_dim_map = get_dimension_symbol_maps(db)
     dim_mode = g.get("dim_mode", "dim")
-    if dim_mode == "dim":
-        dim_symbols = dim_dim_map
-    elif dim_mode == "var":
-        dim_symbols = dim_var_map
-    else:
-        dim_symbols = dim_unit_map
+    dim_symbols = dimension_caches.get(dim_mode, dimension_caches.get("dim", {}))
+
+    node_depth = {}
+    def index_depth(nodes, depth=0):
+        for node in nodes:
+            node_depth[node["id"]] = depth
+            index_depth(node.get("children") or [], depth + 1)
+    index_depth(tree)
 
     return dict(
         tree=tree,
-        active_science_ids=active_science_ids,
-        active_branch_ids=active_branch_ids,
-        active_subbranch_ids=active_subbranch_ids,
-        active_topic_ids=active_topic_ids,
-        diff_min=diff_min,
-        diff_max=diff_max,
+        tree_json=tree_json,
+        active_science_ids=[i for i in compressed if node_depth.get(i) == 0],
+        active_branch_ids=[i for i in compressed if node_depth.get(i) == 1],
+        active_subbranch_ids=[i for i in compressed if node_depth.get(i) == 2],
+        active_topic_ids=[i for i in compressed if node_depth.get(i) == 3],
+        all_none=fs.exclude_all,
+        diff_min=fs.diff_min,
+        diff_max=fs.diff_max,
         current_view=current_view,
-        all_none=(sciences_param == '_none_'),
-        dim_filter=dim_filter,
-        active_qty_ids=active_qty_ids,
+        dim_filter=fs.dimension_filter,
+        active_qty_ids=fs.quantity_ids,
         all_quantities_for_filter=all_quantities_for_filter,
         dim_symbols=dim_symbols,
     )
 
 
 # ---------------------------------------------------------------------------
-# Home
+# Pages
 # ---------------------------------------------------------------------------
 
 @app.route("/")
@@ -514,384 +615,331 @@ def base_units_page():
     return redirect("/quantities?is_dim=1")
 
 
-# ---------------------------------------------------------------------------
-# Formula
-# ---------------------------------------------------------------------------
+def _dimension_matches(row_dimensions, dimension_filter):
+    """Check a row's dimension dict against the user's filter."""
+    for symbol, df in dimension_filter.items():
+        value = df["val"]
+        if value is None:
+            continue
+        actual = row_dimensions.get(f"dim_{symbol}") or 0
+        op = df["op"]
+        if op == "eq" and actual != value:
+            return False
+        if op == "gte" and actual < value:
+            return False
+        if op == "lte" and actual > value:
+            return False
+    return True
+
 
 @app.route("/formula/<formula_id>")
 def formula_detail(formula_id):
     db = get_db()
     locale = g.locale
-    row = get_formula_detail(db, formula_id)
+    row = fetch_formula(db, formula_id)
     if not row:
         return "Formula not found", 404
-    row = _l(row, locale, "name", "description")
-    row["science"] = _get_science_name(row.get("science_id", ""), locale)
-    row["branch"] = _get_branch_name(row.get("branch_id", ""), locale)
-    row["subbranch"] = _get_subbranch_name(row.get("subbranch_id", ""), locale)
-    row["topic"] = _get_topic_name(row.get("topic_id", ""), locale)
-    items = get_formula_items(db, formula_id)
+    row = dict(row)
+    _attach_breadcrumbs(row, locale)
+    items = fetch_formula_items(db, formula_id)
     latex = render_formula_items(items, locale=locale) if items else ""
-    conds = get_formula_conditions(db, formula_id)
-    relations = get_formula_relations(db, formula_id)
-    quantities = get_formula_quantities(db, formula_id)
-    unit_names = _unit_name_map(db, locale)
-    unit_symbols = _unit_symbol_map(db)
+    conditions = fetch_formula_conditions(db, formula_id)
+    related = fetch_formula_related(db, formula_id)
+    quantities = fetch_formula_quantities(db, formula_id)
+    unit_names_map = _unit_name_map(db, locale)
+    unit_symbols_map = _unit_symbol_map(db)
+
     parsed_quantities = []
     for q in quantities:
-        q = _l(q, locale, "name")
-        si_html = render_default_unit_html(q["default_unit"],
-                     unit_url_func=lambda uid: f"/unit/{uid}",
-                     unit_name_func=lambda uid: unit_names.get(uid, uid.replace("_", " ").title()),
-                     locale=locale)
-        si_sym = render_default_unit_symbol(q["default_unit"],
-                     unit_symbol_func=lambda uid: render_symbol(unit_symbols.get(uid, uid)))
-        parsed_quantities.append(dict(q, default_unit_html=Markup(si_html), default_unit_symbol_latex=si_sym))
-    _ensure_dim_caches()
-    dims = get_formula_primary_dimensions(db, formula_id)
-    dim_latex = render_dimensions_latex(*dims,
-        var_latex_map=_dim_var_latex_map or {},
-        unit_symbol_map=_dim_unit_symbol_map or {},
-        dim_latex_map=_dim_latex_map or {},
-        mode=g.get("dim_mode", "dim")) if any(dims) else ""
+        q = dict(q)
+        default_unit_html = format_default_unit_html(
+            q["default_unit"],
+            unit_url=lambda uid: f"/unit/{uid}",
+            unit_name=lambda uid: unit_names_map.get(uid, uid.replace("_", " ").title()),
+            locale=locale,
+        )
+        default_unit_symbol = format_default_unit_symbol(
+            q["default_unit"],
+            unit_symbol=lambda uid: render_symbol(unit_symbols_map.get(uid, uid)),
+        )
+        parsed_quantities.append(dict(
+            q,
+            default_unit_html=Markup(default_unit_html),
+            default_unit_symbol_latex=default_unit_symbol,
+        ))
+
+    var_map, unit_map, dim_map = build_dimension_symbol_maps(db)
+    dim_caches = {"var": var_map, "unit": unit_map, "dim": dim_map}
+    dimensions = compute_formula_dimensions(db, formula_id)
+    dim_latex = (
+        format_dimensions_latex(
+            *dimensions,
+            variable_symbols=dim_caches["var"],
+            unit_symbols=dim_caches["unit"],
+            dimension_symbols=dim_caches["dim"],
+            mode=g.get("dim_mode", "dim"),
+        )
+        if any(dimensions) else ""
+    )
     return render_template(
         "formula.html",
-        formula=row, latex=latex, conds=conds,
-        relations=relations, quantities=parsed_quantities,
+        formula=row, latex=latex, conds=conditions,
+        relations=related, quantities=parsed_quantities,
         dim_latex=dim_latex,
     )
 
-
-# ---------------------------------------------------------------------------
-# Quantity
-# ---------------------------------------------------------------------------
 
 @app.route("/quantity/<quantity_id>")
 def quantity_detail(quantity_id):
     db = get_db()
     locale = g.locale
-    q = get_quantity_detail(db, quantity_id)
+    q = fetch_quantity(db, quantity_id)
     if not q:
         return "Quantity not found", 404
-    q = _l(q, locale, "name", "description")
-    q["science_id"] = q.get("science", "")
-    q["branch_id"] = q.get("branch", "")
-    q["subbranch_id"] = q.get("subbranch", "")
-    q["topic_id"] = q.get("topic", "")
-    q["science"] = _get_science_name(q["science_id"], locale)
-    q["branch"] = _get_branch_name(q["branch_id"], locale)
-    q["subbranch"] = _get_subbranch_name(q["subbranch_id"], locale)
-    q["topic"] = _get_topic_name(q["topic_id"], locale)
-    unit_names = _unit_name_map(db, locale)
-    units = [_l(u, locale, "name") for u in get_quantity_units(db, quantity_id)]
-    primary_f, nonprimary_f = get_quantity_formulas_split(db, quantity_id)
-    related_f = get_quantity_related_formulas(db, quantity_id)
+    q = dict(q)
+    _attach_breadcrumbs(q, locale)
+    primary_formulas, non_primary_formulas = fetch_quantity_formulas_by_side(db, quantity_id)
+    related_formulas = fetch_quantity_related_formulas(db, quantity_id)
 
+    unit_names_map = _unit_name_map(db, locale)
+    unit_symbols_map = _unit_symbol_map(db)
+    default_unit_html = Markup(
+        format_default_unit_html(
+            q["default_unit"],
+            unit_url=lambda uid: f"/unit/{uid}",
+            unit_name=lambda uid: unit_names_map.get(uid, uid.replace("_", " ").title()),
+            locale=locale,
+        )
+    ) if q.get("default_unit") else ""
+
+    default_unit_symbol_latex = Markup(
+        format_default_unit_symbol(
+            q["default_unit"],
+            unit_symbol=lambda uid: render_symbol(unit_symbols_map.get(uid, uid)),
+        )
+    ) if q.get("default_unit") else ""
+
+    # Build units table: default_unit row + any non-composite units in the unit table
+    units = []
+    du_ids = set()
+    if q.get("default_unit"):
+        try:
+            du = json.loads(q["default_unit"])
+        except (json.JSONDecodeError, TypeError):
+            du = []
+        du_ids = {e["unit"] for e in du}
+        unit_system = "SI"
+        for e in du:
+            row = db.execute(
+                "SELECT unit_system FROM unit WHERE id = ?", (e["unit"],)
+            ).fetchone()
+            if row and row["unit_system"] != "SI":
+                unit_system = row["unit_system"]
+        units.append({
+            "symbol_latex": default_unit_symbol_latex,
+            "name_html": default_unit_html,
+            "unit_system": unit_system,
+            "factor": 1,
+            "offset": 0,
+        })
+
+    extra_units = [dict(u) for u in fetch_quantity_units(db, quantity_id) if u["id"] not in du_ids]
+    for eu in extra_units:
+        units.append({
+            "symbol_latex": Markup(render_symbol(eu["symbol"])),
+            "name_html": unit_name(eu["id"]),
+            "unit_system": eu.get("unit_system") or "any",
+            "factor": eu.get("factor", 1),
+            "offset": eu.get("offset", 0),
+        })
     show_offset = any(u.get("offset", 0) != 0 for u in units)
+    show_factor = any(u.get("factor", 1) != 1 for u in units)
 
-    si_row = db.execute(
-        "SELECT symbol FROM unit WHERE quantity_id=? AND default_unit=1 LIMIT 1",
-        (quantity_id,)
-    ).fetchone()
-    si_unit_symbol = si_row["symbol"] if si_row else "SI"
-
-    _ensure_dim_caches()
-    dim_latex = render_dimensions_latex(
-        q["dim_M"], q["dim_L"], q["dim_T"], q["dim_I"], q["dim_Θ"], q["dim_N"], q["dim_J"],
-        var_latex_map=_dim_var_latex_map or {},
-        unit_symbol_map=_dim_unit_symbol_map or {},
-        dim_latex_map=_dim_latex_map or {},
-        mode=g.get("dim_mode", "dim")) if any([q["dim_M"], q["dim_L"], q["dim_T"], q["dim_I"], q["dim_Θ"], q["dim_N"], q["dim_J"]]) else ""
+    var_map, unit_map, dim_map = build_dimension_symbol_maps(db)
+    dim_caches = {"var": var_map, "unit": unit_map, "dim": dim_map}
+    quantity_dims = [
+        q["dim_M"], q["dim_L"], q["dim_T"], q["dim_I"],
+        q["dim_Θ"], q["dim_N"], q["dim_J"],
+    ]
+    dim_latex = (
+        format_dimensions_latex(
+            *quantity_dims,
+            variable_symbols=dim_caches["var"],
+            unit_symbols=dim_caches["unit"],
+            dimension_symbols=dim_caches["dim"],
+            mode=g.get("dim_mode", "dim"),
+        )
+        if any(quantity_dims) else ""
+    )
     return render_template(
         "quantity.html",
-        q=q,
+        q=dict(q, default_unit_html=default_unit_html),
         units=units,
-        primary_formulas=primary_f,
-        nonprimary_formulas=nonprimary_f,
-        related_formulas=related_f,
-        si_unit_symbol=si_unit_symbol,
-        show_offset=show_offset,
+        primary_formulas=primary_formulas,
+        nonprimary_formulas=non_primary_formulas,
+        related_formulas=related_formulas,
         dim_latex=dim_latex,
+        show_factor=show_factor,
+        show_offset=show_offset,
     )
 
-
-# ---------------------------------------------------------------------------
-# Unit
-# ---------------------------------------------------------------------------
 
 @app.route("/unit/<unit_id>")
 def unit_detail(unit_id):
     db = get_db()
-    u = get_unit_detail(db, unit_id)
-    if not u:
+    unit = fetch_unit(db, unit_id)
+    if not unit:
         return "Unit not found", 404
-    if is_composite_unit(unit_id):
-        return redirect(f"/quantity/{u['quantity_id']}")
-    u = _l(u, g.locale, "name")
-    u["science"] = _get_science_name(u.get("science_id", ""), g.locale)
-    u["branch"] = _get_branch_name(u.get("branch_id", ""), g.locale)
-    u["subbranch"] = _get_subbranch_name(u.get("subbranch_id", ""), g.locale)
-    u["topic"] = _get_topic_name(u.get("topic_id", ""), g.locale)
-    si_unit_symbol = get_si_unit_symbol(db, u["quantity_id"])
-    return render_template("unit.html", unit=u, si_unit_symbol=si_unit_symbol)
+    unit = dict(unit)
+    _attach_breadcrumbs(unit, g.locale)
+    si_unit_symbol = fetch_si_unit_symbol(db, unit["quantity_id"])
+    return render_template("unit.html", unit=unit, si_unit_symbol=si_unit_symbol)
 
-
-# ---------------------------------------------------------------------------
-# Search
-# ---------------------------------------------------------------------------
 
 @app.route("/search")
 def search_page():
-    q = request.args.get("q", "")
-    if not q:
+    query = request.args.get("q", "").strip()[:SEARCH_QUERY_MAX_LENGTH]
+    if not query:
         return render_template("search.html", query="", results=[])
-    results = search(get_db(), q)
-    return render_template("search.html", query=q, results=results)
+    results = search_database(get_db(), query)
+    return render_template("search.html", query=query, results=results)
 
-
-# ---------------------------------------------------------------------------
-# All Quantities
-# ---------------------------------------------------------------------------
 
 @app.route("/quantities")
 def all_quantities():
     db = get_db()
     locale = g.locale
-    unit_names = _unit_name_map(db, locale)
-    unit_symbols = _unit_symbol_map(db)
+    fs = parse_filter_state(request.args)
+    tree = _sciences_tree()
 
-    sciences_param = request.args.get("science", "")
-    active_science_ids = _get_science_ids_from_params(sciences_param)
-    diff_min = request.args.get("diff_min", 0, type=int)
-    diff_max = request.args.get("diff_max", 10, type=int)
-    branches_param = request.args.get("branch", "")
-    active_branch_ids = branches_param.split(",") if branches_param else []
-    subbranches_param = request.args.get("subbranch", "")
-    active_subbranch_ids = subbranches_param.split(",") if subbranches_param else []
-    topics_param = request.args.get("topic", "")
-    active_topic_ids = topics_param.split(",") if topics_param else []
+    if _compress_selection(tree, fs.ids) == {r["id"] for r in tree}:
+        return redirect("/quantities")
 
-    # Dimension filter
-    dim_filter = {}
-    for dsym in DIM_ORDER:
-        op = request.args.get(f"dim_{dsym}_op", "eq")
-        val = request.args.get(f"dim_{dsym}_val", None, type=int)
-        dim_filter[dsym] = {"op": op if op in ("eq", "gte", "lte") else "eq", "val": val}
-    has_dim_filter = any(df["val"] is not None for df in dim_filter.values())
+    if fs.exclude_all or (fs.ids_provided and not fs.ids):
+        return render_template(
+            "quantities.html",
+            quantities=[],
+            heading="No quantities found matching the selected filters.",
+        )
 
-    is_dim = request.args.get("is_dim", 0, type=int)
-
-    qty_param = request.args.get("qty", "")
-    active_qty_ids = qty_param.split(",") if qty_param else []
-
-    raw_quantities = get_all_quantities(db)
+    raw_quantities = fetch_all_quantities(db)
+    topic_filter = _filtered_ids_for_query(tree, fs.ids)
+    unit_names_map = _unit_name_map(db, locale)
+    unit_symbols_map = _unit_symbol_map(db)
 
     filtered = []
     for q in raw_quantities:
-        q = _l(q, locale, "name")
+        q = dict(q)
+        _attach_breadcrumbs(q, locale)
 
-        if active_science_ids and q.get("science_id") not in active_science_ids:
+        if topic_filter and q.get("topic_id") not in topic_filter:
+            continue
+        if fs.has_dimension_filter and not _dimension_matches(q, fs.dimension_filter):
+            continue
+        if fs.quantity_ids and q["id"] not in fs.quantity_ids:
+            continue
+        if fs.base_quantity_only and not q.get("is_dim"):
             continue
 
-        if active_branch_ids and q.get("branch_id") not in active_branch_ids:
-            continue
-
-        if active_subbranch_ids and q.get("subbranch_id") not in active_subbranch_ids:
-            continue
-
-        if active_topic_ids and q.get("topic_id") not in active_topic_ids:
-            continue
-
-        if has_dim_filter:
-            def _q_dim_match(q):
-                for dsym, df in dim_filter.items():
-                    v = df["val"]
-                    if v is None:
-                        continue
-                    col = f"dim_{dsym}"
-                    actual = q.get(col, 0)
-                    op = df["op"]
-                    if op == "eq" and actual != v:
-                        return False
-                    elif op == "gte" and actual < v:
-                        return False
-                    elif op == "lte" and actual > v:
-                        return False
-                return True
-            if not _q_dim_match(q):
-                continue
-
-        if active_qty_ids and q["id"] not in active_qty_ids:
-            continue
-
-        if is_dim and not q.get("is_dim"):
-            continue
-
-        # Apply locale to default_unit_name
-        if q.get("default_unit_name"):
-            dun = json.loads(q["default_unit_name"]) if isinstance(q["default_unit_name"], str) else {}
-            q["default_unit_name"] = dun.get(locale, dun.get("en-us", q["default_unit_name"]))
-
-        si_html = render_default_unit_html(q["default_unit"],
-                     unit_url_func=lambda uid: f"/unit/{uid}",
-                     unit_name_func=lambda uid: unit_names.get(uid, uid.replace("_", " ").title()),
-                     locale=locale)
-        si_sym = render_default_unit_symbol(q["default_unit"],
-                     unit_symbol_func=lambda uid: render_symbol(unit_symbols.get(uid, uid)))
-        q["default_unit_html"] = Markup(si_html)
-        q["default_unit_symbol_latex"] = si_sym
+        q["default_unit_html"] = Markup(
+            format_default_unit_html(
+                q["default_unit"],
+                unit_url=lambda uid: f"/unit/{uid}",
+                unit_name=lambda uid: unit_names_map.get(uid, uid.replace("_", " ").title()),
+                locale=locale,
+            )
+        )
+        q["default_unit_symbol_latex"] = format_default_unit_symbol(
+            q["default_unit"],
+            unit_symbol=lambda uid: render_symbol(unit_symbols_map.get(uid, uid)),
+        )
         filtered.append(q)
 
-    heading_dim_symbols, heading_dim_unit_symbols, heading_dim_dim_symbols = get_dimension_symbol_maps(db)
-    dim_mode = g.get("dim_mode", "dim")
-    if dim_mode == "dim":
-        heading_dim_sym_map = heading_dim_dim_symbols
-    elif dim_mode == "var":
-        heading_dim_sym_map = heading_dim_symbols
-    else:
-        heading_dim_sym_map = heading_dim_unit_symbols
-    heading = _make_heading("quantities", active_science_ids, active_branch_ids, active_subbranch_ids,
-                             active_topic_ids, diff_min, diff_max, locale, _get_sciences_tree(),
-                             dim_filter=dim_filter if has_dim_filter else None,
-                             dim_symbol_map=heading_dim_sym_map,
-                             dim_unit_symbol_map=heading_dim_unit_symbols,
-                             dim_var_symbol_map=heading_dim_symbols,
-                             force_var_left=(dim_mode == "unit"))
-    if is_dim:
+    name_map = _tree_name_map(tree, locale)
+    try:
+        var_map, unit_map, dim_map = build_dimension_symbol_maps(db)
+        dim_caches = {"var": var_map, "unit": unit_map, "dim": dim_map}
+    except sqlite3.OperationalError:
+        dim_caches = {"var": {}, "unit": {}, "dim": {}}
+    heading = _heading_from_compressed(
+        "Quantities", _compress_selection(tree, fs.ids), name_map, locale, fs,
+        dim_mode=g.get("dim_mode", "dim"), dimension_caches=dim_caches,
+    )
+    if fs.base_quantity_only:
         heading = "Base quantities"
     return render_template("quantities.html", quantities=filtered, heading=heading)
 
-
-# ---------------------------------------------------------------------------
-# All Formulas
-# ---------------------------------------------------------------------------
 
 @app.route("/formulas")
 def all_formulas():
     db = get_db()
     locale = g.locale
+    fs = parse_filter_state(request.args)
+    tree = _sciences_tree()
+    compressed = _compress_selection(tree, fs.ids)
+    if compressed == {r["id"] for r in tree}:
+        return redirect("/formulas")
 
-    sciences_param = request.args.get("science", "")
-    active_science_ids = _get_science_ids_from_params(sciences_param)
-    diff_min = request.args.get("diff_min", 0, type=int)
-    diff_max = request.args.get("diff_max", 10, type=int)
-    branches_param = request.args.get("branch", "")
-    active_branch_ids = branches_param.split(",") if branches_param else []
-    subbranches_param = request.args.get("subbranch", "")
-    active_subbranch_ids = subbranches_param.split(",") if subbranches_param else []
-    topics_param = request.args.get("topic", "")
-    active_topic_ids = topics_param.split(",") if topics_param else []
+    if fs.exclude_all or (fs.ids_provided and not fs.ids):
+        return render_template(
+            "formulas.html",
+            formulas=[],
+            heading="No formulas found matching the selected filters.",
+        )
 
-    # Dimension filter params
-    dim_filter = {}
-    for dsym in DIM_ORDER:
-        op = request.args.get(f"dim_{dsym}_op", "eq")
-        val = request.args.get(f"dim_{dsym}_val", None, type=int)
-        dim_filter[dsym] = {"op": op if op in ("eq", "gte", "lte") else "eq", "val": val}
+    formulas = [dict(f) for f in fetch_all_formulas(db)]
+    topic_filter = _filtered_ids_for_query(tree, fs.ids)
+    if topic_filter:
+        formulas = [f for f in formulas if f.get("topic_id") in topic_filter]
+    formulas = [
+        f for f in formulas
+        if fs.diff_min <= (f.get("difficulty") or 0) <= fs.diff_max
+    ]
 
-    # Quantity filter params
-    qty_param = request.args.get("qty", "")
-    active_qty_ids = qty_param.split(",") if qty_param else []
+    if fs.has_dimension_filter:
+        dim_map = compute_all_formula_dimensions(db)
+        formulas = [
+            f for f in formulas
+            if _dimension_matches(dim_map.get(f["id"], {}), fs.dimension_filter)
+        ]
 
-    formulas = get_all_formulas(db)
-    formulas = [_l(f, locale, "name") for f in formulas]
-
-    # Filter by science (compare IDs directly)
-    if active_science_ids:
-        formulas = [f for f in formulas if f.get("science_id") in active_science_ids]
-
-    # Filter by branch (compare IDs directly)
-    if active_branch_ids:
-        formulas = [f for f in formulas if f.get("branch_id") in active_branch_ids]
-
-    # Filter by subbranch (compare IDs directly)
-    if active_subbranch_ids:
-        formulas = [f for f in formulas if f.get("subbranch_id") in active_subbranch_ids]
-
-    # Filter by topic (compare IDs directly)
-    if active_topic_ids:
-        formulas = [f for f in formulas if f.get("topic_id") in active_topic_ids]
-
-    # Filter by difficulty
-    formulas = [f for f in formulas if diff_min <= (f.get("difficulty") or 0) <= diff_max]
-
-    # Filter by dimension
-    has_dim_filter = any(
-        df["val"] is not None for df in dim_filter.values()
-    )
-    if has_dim_filter:
-        dim_map = get_formula_dimension_map(db)
-        def _dim_match(fid):
-            dims = dim_map.get(fid, {})
-            for dsym, df in dim_filter.items():
-                v = df["val"]
-                if v is None:
-                    continue
-                col = f"dim_{dsym}"
-                actual = dims.get(col, 0)
-                op = df["op"]
-                if op == "eq" and actual != v:
-                    return False
-                elif op == "gte" and actual < v:
-                    return False
-                elif op == "lte" and actual > v:
-                    return False
-            return True
-        formulas = [f for f in formulas if _dim_match(f["id"])]
-
-    # Filter by quantity (formula must contain ALL selected quantities)
-    if active_qty_ids:
-        matching_ids = get_formulas_containing_all_quantities(db, active_qty_ids)
+    if fs.quantity_ids:
+        quantity_match = (
+            fetch_formulas_with_any_quantity
+            if fs.quantity_mode == "or"
+            else fetch_formulas_with_all_quantities
+        )
+        matching_ids = quantity_match(db, fs.quantity_ids)
         if matching_ids is not None:
             formulas = [f for f in formulas if f["id"] in matching_ids]
 
-    # Pre-compute LaTeX for each formula and set display names
     for f in formulas:
-        f["science"] = _get_science_name(f.get("science_id", ""), locale)
-        f["branch"] = _get_branch_name(f.get("branch_id", ""), locale)
-        f["subbranch"] = _get_subbranch_name(f.get("subbranch_id", ""), locale)
-        f["topic"] = _get_topic_name(f.get("topic_id", ""), locale)
-        items = get_formula_items(db, f["id"])
+        _attach_breadcrumbs(f, locale)
+        items = fetch_formula_items(db, f["id"])
         f["latex"] = render_formula_items(items, locale=locale) if items else ""
 
-    # Quantity names for heading
-    qty_names = []
-    if active_qty_ids:
-        all_q = get_all_quantities(db)
-        for q in all_q:
-            if q["id"] in active_qty_ids:
-                n = q["name"]
-                if isinstance(n, str):
-                    try:
-                        n = json.loads(n)
-                    except Exception:
-                        pass
-                if isinstance(n, dict):
-                    n = n.get(locale, n.get("en-us", q["id"]))
-                elif not n:
-                    n = q["id"]
-                qty_names.append(n)
-    heading_dim_symbols, heading_dim_unit_symbols, heading_dim_dim_symbols = get_dimension_symbol_maps(db)
-    dim_mode = g.get("dim_mode", "dim")
-    if dim_mode == "dim":
-        heading_dim_sym_map = heading_dim_dim_symbols
-    elif dim_mode == "var":
-        heading_dim_sym_map = heading_dim_symbols
-    else:
-        heading_dim_sym_map = heading_dim_unit_symbols
-    heading = _make_heading("formulas", active_science_ids, active_branch_ids, active_subbranch_ids,
-                             active_topic_ids, diff_min, diff_max, locale, _get_sciences_tree(),
-                             dim_filter=dim_filter if has_dim_filter else None,
-                             dim_symbol_map=heading_dim_sym_map,
-                             dim_unit_symbol_map=heading_dim_unit_symbols,
-                             dim_var_symbol_map=heading_dim_symbols,
-                             force_var_left=(dim_mode == "unit"),
-                             active_qty_names=qty_names)
+    quantity_names = []
+    if fs.quantity_ids:
+        for q in fetch_all_quantities(db):
+            if q["id"] in fs.quantity_ids:
+                quantity_names.append(localise(q["name"], locale, default=q["id"]))
+
+    name_map = _tree_name_map(tree, locale)
+    try:
+        var_map, unit_map, dim_map = build_dimension_symbol_maps(db)
+        dim_caches = {"var": var_map, "unit": unit_map, "dim": dim_map}
+    except sqlite3.OperationalError:
+        dim_caches = {"var": {}, "unit": {}, "dim": {}}
+    heading = _heading_from_compressed(
+        "Formulas", compressed, name_map, locale, fs,
+        dim_mode=g.get("dim_mode", "dim"), dimension_caches=dim_caches,
+        active_quantity_names=quantity_names,
+    )
     return render_template("formulas.html", formulas=formulas, heading=heading)
 
 
 # ---------------------------------------------------------------------------
-# Export & Import
+# Export
 # ---------------------------------------------------------------------------
 
 @app.route("/export")
@@ -900,85 +948,123 @@ def export():
     db = get_db()
 
     if fmt == "xlsx":
-        buf = io.BytesIO()
-        export_xlsx(db, buf)
-        buf.seek(0)
+        buffer = io.BytesIO()
+        export_to_xlsx(db, buffer)
+        buffer.seek(0)
         return Response(
-            buf.getvalue(),
+            buffer.getvalue(),
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Content-Disposition": "attachment; filename=formulas.xlsx"},
         )
 
     if fmt == "ods":
-        buf = io.BytesIO()
-        export_ods(db, buf)
-        buf.seek(0)
+        buffer = io.BytesIO()
+        export_to_ods(db, buffer)
+        buffer.seek(0)
         return Response(
-            buf.getvalue(),
+            buffer.getvalue(),
             mimetype="application/vnd.oasis.opendocument.spreadsheet",
             headers={"Content-Disposition": "attachment; filename=formulas.ods"},
         )
 
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         with tempfile.TemporaryDirectory() as tmp:
-            export_csv_dir(db, tmp)
+            export_to_csv_directory(db, tmp)
             for p in Path(tmp).iterdir():
                 zf.write(p, p.name)
-    buf.seek(0)
+    buffer.seek(0)
     return Response(
-        buf.getvalue(),
+        buffer.getvalue(),
         mimetype="application/zip",
         headers={"Content-Disposition": "attachment; filename=formulas_csv.zip"},
     )
 
 
-def _safe_import(db, raw, ext, filename):
-    """Try to import a file; return (success_bool, message)."""
+# ---------------------------------------------------------------------------
+# Import
+# ---------------------------------------------------------------------------
+
+def _is_within(base, target):
+    """True if target is inside base (used for zip-slip protection)."""
+    base = Path(base).resolve()
+    target = Path(target).resolve()
     try:
-        if ext == ".xlsx":
-            buf = io.BytesIO(raw)
-            counts = import_xlsx(db, buf)
-        elif ext == ".ods":
-            buf = io.BytesIO(raw)
-            counts = import_ods(db, buf)
-        elif ext == ".zip":
-            with tempfile.TemporaryDirectory() as tmp:
-                with zipfile.ZipFile(io.BytesIO(raw)) as zf:
-                    zf.extractall(tmp)
-                counts = import_csv_dir(db, tmp)
-        elif ext == ".csv":
-            csv_str = raw.decode("utf-8")
-            counts = import_csv(db, csv_str)
-        else:
-            return False, f"Unsupported file extension: {ext}. Use .csv, .zip, .xlsx, or .ods."
-        rebuild_fts(db)
-        parts = [f"{k}: {v}" for k, v in counts.items() if v > 0]
-        return True, f"Imported {len(parts)} table(s): {', '.join(parts)}" if parts else (True, "No data imported.")
-    except Exception as e:
-        return False, f"Import failed: {str(e)}"
+        target.relative_to(base)
+        return True
+    except ValueError:
+        return False
+
+
+_ALLOWED_IMPORT_EXTENSIONS = (".csv", ".xlsx", ".ods", ".zip")
+
+
+def _import_by_extension(db, ext, raw):
+    """Dispatch an import based on file extension. Returns a counts dict."""
+    if ext == ".csv":
+        return import_from_csv(db, raw.decode("utf-8"))
+    if ext == ".xlsx":
+        return import_from_xlsx(db, io.BytesIO(raw))
+    if ext == ".ods":
+        return import_from_ods(db, io.BytesIO(raw))
+    if ext == ".zip":
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+                for member in zf.infolist():
+                    dest = (tmp_path / member.filename).resolve()
+                    if not _is_within(tmp_path, dest):
+                        raise ValueError(f"Refused unsafe path in zip: {member.filename}")
+                zf.extractall(tmp_path)
+            return import_from_csv_directory(db, str(tmp_path))
+    raise ValueError(
+        f"Unsupported file extension: {ext}. Use .csv, .zip, .xlsx, or .ods."
+    )
 
 
 @app.route("/import", methods=["POST"])
 def import_file():
+    if not IMPORT_TOKEN:
+        return "Import endpoint is disabled (SCIFIND_IMPORT_TOKEN not set).", 403
+
     file = request.files.get("file")
-    if not file or file.filename == "":
+    if not file or not file.filename:
         flash("No file selected.", "error")
         return redirect("/")
 
-    filename = file.filename or ""
-    ext = Path(filename).suffix.lower()
-    raw = file.stream.read()
+    provided = (
+        request.headers.get("X-Import-Token", "")
+        or request.form.get("import_token", "")
+    )
+    if not hmac.compare_digest(provided, IMPORT_TOKEN):
+        return "Forbidden: missing or invalid import token.", 403
 
-    if ext not in (".csv", ".xlsx", ".ods", ".zip"):
-        flash(f"Unsupported file type '{ext}'. Allowed: .csv, .zip, .xlsx, .ods", "error")
+    ext = Path(file.filename).suffix.lower()
+    if ext not in _ALLOWED_IMPORT_EXTENSIONS:
+        flash(
+            f"Unsupported file type '{ext}'. Allowed: {', '.join(_ALLOWED_IMPORT_EXTENSIONS)}",
+            "error",
+        )
         return redirect("/")
 
+    raw = file.stream.read()
     db = get_db()
-    ok, msg = _safe_import(db, raw, ext, filename)
-    flash(msg, "success" if ok else "error")
+    try:
+        counts = _import_by_extension(db, ext, raw)
+        rebuild_search_indexes(db)
+        parts = [f"{k}: {v}" for k, v in counts.items() if v > 0]
+        if parts:
+            flash(f"Imported {len(parts)} table(s): {', '.join(parts)}", "success")
+        else:
+            flash("No data imported.", "success")
+    except Exception as exc:
+        logger.exception("Import failed: %s", exc)
+        flash(f"Import failed: {exc}", "error")
     return redirect("/")
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    host = os.environ.get("SCIFIND_HOST", "127.0.0.1")
+    port = int(os.environ.get("SCIFIND_PORT", "5000"))
+    debug = os.environ.get("SCIFIND_DEBUG", "").lower() in ("1", "true", "yes")
+    app.run(host=host, port=port, debug=debug)

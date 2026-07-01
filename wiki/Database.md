@@ -101,21 +101,6 @@ Units with conversion factors.
 | `latex_factor` | TEXT | LaTeX display for factor (e.g. `\frac{180}{\pi}`) |
 | `offset` | REAL | Conversion offset |
 
-## Views (`views.sql`)
-
-8 views providing aggregated formula/quantity data with localized names, derived dimensions, and unit mappings:
-
-| View | Purpose |
-|------|---------|
-| `v_formula_summary` | Formula overview with item/condition/relation counts |
-| `v_formula_expanded` | Formula items with quantity details |
-| `v_formula_quantities` | Distinct quantities per formula |
-| `v_quantity_usage` | Formulas that use a given quantity |
-| `v_conditions` | Conditions with formula names |
-| `v_formula_relations` | Formula relations with names |
-| `v_units` | Units for each quantity |
-| `v_formulas_by_topic` | Formulas grouped by topic |
-
 ## FTS5 Indexes
 
 - `formula_fts` — search by formula name, description, quantities
@@ -128,27 +113,11 @@ Data is loaded from three seed files:
 
 | File | Contents |
 |------|----------|
-| `seed.sql` | Core formulas (~45), quantities (~30), units (~15), conditions (3), relations (7) |
-| `seed_units.sql` | Additional SI/non-SI units (~75), derived quantities (~50), unit conversion factors |
-| `seed_formulas.sql` | Extended formulas (~45) and quantities (~17) across physics, chemistry, mathematics |
+| `seed.sql` | Core formulas, quantities, units, conditions, relations |
+| `seed_units.sql` | Additional SI/non-SI units, derived quantities, unit conversion factors |
+| `seed_formulas.sql` | Extended formulas and quantities across physics, chemistry, mathematics |
 
-Totals: ~90 formulas, ~100 quantities, ~90 units, 3 conditions, 7 relations spanning physics, mathematics, and chemistry.
-
-## Migration
-
-`formula_lib.migrate_db()` handles:
-- Adding the `subbranch` column to `formula` and `quantity`
-- Adding the `name` column to `unit`
-- Converting old `{"en": ...}` format to `{"en-us": ...}`
-- Adding en-uk locale keys for US/UK spelling differences
-- Converting science/branch/topic from JSON i18n to tree IDs
-- Migrating LaTeX symbol names to siunitx-compatible forms
-- Adding `symbol_overwrite` column to `quantity`
-- Adding `quantity_name_overwrite` column to `formula_item`
-- Adding `latex_coef` column to `formula_item` (replaces `coeff_special`; migration converts old `pi`→`\pi`, new seeds store `\pi` directly)
-- Adding `latex_factor` column to `unit`
-- Ensuring FTS5 virtual tables exist
-- Syncing `sciences.json` from database contents
+Run `scifind_cli.py init` after editing the schema or these files.
 
 ## Conventions
 

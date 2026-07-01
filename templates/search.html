@@ -19,7 +19,7 @@
   <li>
     {% if r.kind == 'formula' %}
     <a href="/formula/{{ r.id }}"><b>{{ locale_text(r.name) }}</b></a>
-    <small>formula &mdash; {{ r.branch_id.replace('_', ' ').title() }} &rarr; {{ r.topic_id.replace('_', ' ').title() }}</small>
+    <small>formula &mdash; {{ (r.branch_id or '').replace('_', ' ').title() }} &rarr; {{ (r.topic_id or '').replace('_', ' ').title() }}</small>
     {% elif r.kind == 'quantity' %}
     <a href="/quantity/{{ r.id }}"><b>{{ locale_text(r.name) }}</b></a>
     <small>quantity &mdash; ${{ r.extra }}$</small>

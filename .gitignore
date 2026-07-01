@@ -1,5 +1,7 @@
-*.db
-*.sqlite
-instance/
 __pycache__/
 *.pyc
+*.db
+!formulas.db
+*.db-wal
+*.db-shm
+instance/

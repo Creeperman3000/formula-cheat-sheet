@@ -6,24 +6,14 @@
   <script>(function(){try{var t=localStorage.getItem('sf-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}})();</script>
   <title>{% block title %}Scifind{% endblock %}</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-  <script>window._KATEX_MACROS = {
-    '\\kilogram': '\\mathrm{kg}',
-    '\\meter': '\\mathrm{m}',
-    '\\second': '\\mathrm{s}',
-    '\\newton': '\\mathrm{N}',
-    '\\ohm': '\\Omega',
-    '\\degreeCelsius': '{}^{\\circ}\\mathrm{C}',
-    '\\celsius': '{}^{\\circ}\\mathrm{C}',
-    '\\kelvin': '\\mathrm{K}',
-    '\\gram': '\\mathrm{g}',
-    '\\hertz': '\\mathrm{Hz}',
-    '\\centi': '\\mathrm{c}',
-    '\\textdegree': '{}^{\\circ}',
-  };</script>
+  <script>window._KATEX_MACROS = {};</script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
     onload="var opts={delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],macros:window._KATEX_MACROS};renderMathInElement(document.body,opts);document.documentElement.classList.add('katex-ready');if(typeof renderQtyChips==='function')renderQtyChips();"
     onerror="document.documentElement.classList.add('katex-ready');"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/jstree.min.css') }}">
+  <script src="{{ url_for('static', filename='js/jquery.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/jstree.min.js') }}"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -35,7 +25,7 @@
       --border: #d0d0d0;
       --accent: #2563eb;
       --accent-hover: #1d4ed8;
-      --sidebar-width: 260px;
+      --sidebar-width: 300px;
       --topbar-height: 52px;
       --track-height: 6px;
       --font: system-ui, -apple-system, sans-serif;
@@ -116,6 +106,51 @@
     .settings-item button:hover { background: var(--bg-secondary); }
     .settings-divider { height: 1px; background: var(--border); margin: 4px 0; }
 
+    /* Filter button rows */
+    .filter-buttons { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; }
+    .filter-btn { font-size: 0.72rem; padding: 3px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); cursor: pointer; line-height: 1.4; }
+    .filter-btn:hover { background: var(--bg-secondary); border-color: var(--accent); }
+    .filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .filter-btn-link { font-size: 0.72rem; padding: 3px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); text-decoration: none; line-height: 1.4; display: inline-block; cursor: pointer; }
+    .filter-btn-link:hover { background: var(--bg-secondary); border-color: var(--accent); text-decoration: none; }
+
+    /* Section heading with reset button */
+    .section-label-row { display: flex; align-items: center; justify-content: space-between; margin: 12px 0 6px; }
+    .section-label-row .section-label { margin: 0; }
+
+    /* jsTree in right sidebar */
+    #sidebar-right .jstree-default .jstree-anchor { font-size: 0.85rem; padding: 2px 8px 2px 4px !important; }
+    #sidebar-right .jstree-node { background: none !important; }
+    /* Narrower caret */
+    #sidebar-right .jstree-default .jstree-ocl { width: 18px !important; position: relative; }
+    /* Custom checkboxes – match app theme */
+    #sidebar-right .jstree-default .jstree-checkbox { background: none !important; width: 16px !important; height: 16px !important; border: 2px solid var(--border) !important; border-radius: 3px; position: relative; margin-top: 3px; margin-right: 4px; }
+    #sidebar-right .jstree-default .jstree-clicked > .jstree-checkbox,
+    #sidebar-right .jstree-default .jstree-checked > .jstree-checkbox { background: var(--accent) !important; border-color: var(--accent) !important; }
+    #sidebar-right .jstree-default .jstree-clicked > .jstree-checkbox::after,
+    #sidebar-right .jstree-default .jstree-checked > .jstree-checkbox::after { content: ''; position: absolute; left: 4px; top: 2px; width: 4px; height: 7px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+    #sidebar-right .jstree-default .jstree-anchor > .jstree-undetermined { background: var(--accent) !important; width: 16px !important; height: 16px !important; border: 2px solid var(--accent) !important; border-radius: 3px; position: relative; margin-top: 3px; }
+    #sidebar-right .jstree-default .jstree-anchor > .jstree-undetermined::after { content: ''; position: absolute; left: 2px; top: 5px; width: 8px; height: 2px; background: #fff; border-radius: 1px; border: none; transform: none; }
+    /* Unchecked checkboxes hidden by default, shown on sidebar hover */
+    #sidebar-right .jstree-checkbox { opacity: 0; }
+    #sidebar-right:hover .jstree-checkbox { opacity: 1 !important; }
+    /* Exception: top-level, undetermined, and their direct children always visible */
+    #sidebar-right .jstree-container-ul > .jstree-node > .jstree-anchor > .jstree-checkbox,
+    #sidebar-right .jstree-undetermined,
+    #sidebar-right .jstree-node.jstree-undetermined-parent > .jstree-children > .jstree-node > .jstree-anchor > .jstree-checkbox { opacity: 1 !important; }
+    /* Collapsed caret: filled right-pointing triangle, always visible */
+    #sidebar-right .jstree-default .jstree-closed > .jstree-ocl { background: none !important; }
+    #sidebar-right .jstree-default .jstree-closed > .jstree-ocl::after { content: ''; position: absolute; left: 6px; top: 4px; width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 7px solid var(--text); }
+    /* Leaf nodes that were incorrectly closed via toggle_node should not show caret */
+    #sidebar-right .jstree-default .jstree-leaf.jstree-closed > .jstree-ocl { background: none !important; }
+    #sidebar-right .jstree-default .jstree-leaf.jstree-closed > .jstree-ocl::after { content: none !important; }
+    /* Expanded caret hidden by default, shown on node hover, filled down-pointing triangle */
+    #sidebar-right .jstree-default .jstree-open > .jstree-ocl { background: none !important; opacity: 0; }
+    #sidebar-right .jstree-default .jstree-open > .jstree-ocl::after { content: ''; position: absolute; left: 4px; top: 6px; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 7px solid var(--text); }
+    #sidebar-right .jstree-default .jstree-open:hover > .jstree-ocl { opacity: 1; }
+    /* Remove hover highlight on nodes */
+    #sidebar-right .jstree-default .jstree-hovered { background: transparent !important; box-shadow: none !important; }
+
     /* Body layout (flex) */
     .body-wrap { display: flex; height: calc(100vh - var(--topbar-height)); overflow: hidden; }
 
@@ -138,29 +173,6 @@
     .view-tab { flex: 1; padding: 6px 8px; text-align: center; border: 1px solid var(--border); border-radius: 6px; font-size: 0.8rem; background: var(--bg); color: var(--text); display: block; }
     .view-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
     .section-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin: 12px 0 6px; }
-
-    /* Filter checkboxes */
-    .filter-science { padding: 2px 0; }
-    .filter-cb { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 2px 0; position: relative; }
-    .filter-cb input { accent-color: var(--accent); width: 16px; height: 16px; flex-shrink: 0; cursor: pointer; }
-    .filter-cb:hover { color: var(--accent); }
-    .filter-branch { padding-left: 12px; }
-    .filter-branch .filter-cb { font-weight: 500; font-size: 0.83rem; }
-    .filter-subbranch { padding-left: 18px; }
-    .filter-subbranch .filter-cb { font-weight: 400; font-size: 0.82rem; }
-    .filter-topic { padding-left: 24px; }
-    .filter-topic .filter-cb { color: var(--text-secondary); font-size: 0.82rem; }
-    .filter-topic .filter-cb:hover { color: var(--accent); }
-    .filter-science-cb { font-weight: 600; font-size: 0.85rem; }
-    .filter-cb input:not(:checked) { opacity: 0; }
-    .filter-cb:hover input:not(:checked) { opacity: 1; }
-    .filter-cb input:indeterminate { opacity: 1; }
-    .filter-cb input:checked { opacity: 1; }
-    .filter-cb input[data-implicit] { opacity: 0; }
-    .filter-cb:hover input[data-implicit] { opacity: 1; }
-    .tree-base-link { padding: 2px 0; margin-bottom: 4px; }
-    .tree-base-link a { font-weight: 600; font-size: 0.85rem; display: block; padding: 2px 0; color: inherit; }
-    .tree-base-link a:hover { color: var(--accent); }
 
     /* Dimension filter rows */
     .filter-dim-row { display: flex; align-items: center; gap: 4px; padding: 2px 0; font-size: 0.82rem; }
@@ -414,10 +426,13 @@
           <a class="view-tab {{ 'active' if current_view == 'quantities' }}" href="/quantities{{ '?' + request.query_string.decode() if request.query_string.decode() else '' }}">&#x2113; Quantities</a>
         </div>
 
-        <div class="tree-base-link" style="margin-bottom:0"><a href="/base-units">Base quantities</a></div>
-
         <div class="dim-filter-loadable" id="dim-filter-area">
         <div class="section-label">Dimension</div>
+        <div class="filter-buttons">
+          <a class="filter-btn-link" href="/quantities?is_dim=1">Base quantities</a>
+          <button class="filter-btn" id="dim-fill-zeros" type="button" title="Set empty dimension fields to 0">Fill empty</button>
+          <button class="filter-btn" id="dim-reset" type="button" title="Clear all dimension filters">Reset</button>
+        </div>
         {% for dsym in ['M','L','T','I','Θ','N','J'] %}
         {% set df = dim_filter.get(dsym, {'op': 'eq', 'val': None}) %}
         {% set ds = dim_symbols.get(dsym, dsym) %}
@@ -434,7 +449,12 @@
         </div>
 
         <div class="rest-loadable">
-        <div class="section-label">Quantity</div>
+        <div class="section-label-row">
+          <div class="section-label">Quantity</div>
+          <div class="filter-buttons">
+            <button class="filter-btn" id="qty-reset" type="button" title="Clear quantity filter">Reset</button>
+          </div>
+        </div>
         <div class="filter-qty-search-wrap">
           <div class="qty-search-wrap">
             <input type="text" class="qty-search" id="qty-search" placeholder="Search quantity..." autocomplete="off">
@@ -444,7 +464,12 @@
         </div>
 
         <div class="diff-wrap">
-          <div class="diff-label">Difficulty</div>
+          <div class="section-label-row">
+            <div class="diff-label">Difficulty</div>
+            <div class="filter-buttons">
+              <button class="filter-btn" id="diff-reset" type="button" title="Reset difficulty range">Reset</button>
+            </div>
+          </div>
           <div class="diff-sliders">
             <div class="diff-track"></div>
             <div class="diff-fill" id="diff-fill"></div>
@@ -471,57 +496,14 @@
     <div class="sidebar right" id="sidebar-right">
       <div class="sidebar-resize right-edge" id="sidebar-resize-right"></div>
       <div class="sidebar-inner" id="sidebar-right-inner">
-        <div class="section-label">Filter</div>
-        {% for s in tree %}
-        <div class="filter-science" data-tree-science="{{ s.id }}">
-          <label class="filter-cb filter-science-cb">
-            <input type="checkbox" class="science-cb" data-science="{{ s.id }}" onchange="onFilterChange(this)"
-              {{ 'checked' if (not active_science_ids and not all_none) or s.id in active_science_ids }}>
-            {{ s._name }}
-          </label>
-          {% for child in s.get('children', []) %}
-          {% set gchildren = child.get('children', []) %}
-          {% set has_subb = gchildren and 'children' in gchildren[0] %}
-          <div class="filter-branch">
-            <label class="filter-cb filter-branch-cb">
-              <input type="checkbox" class="branch-cb" data-science="{{ s.id }}" data-branch="{{ child.id }}" onchange="onFilterChange(this)"
-                {{ 'checked' if child.id in active_branch_ids }}>
-              {{ child._name }}
-            </label>
-            {% if has_subb %}
-            {% for sub in gchildren %}
-            <div class="filter-subbranch">
-              <label class="filter-cb filter-subbranch-cb">
-                <input type="checkbox" class="subbranch-cb" data-science="{{ s.id }}" data-branch="{{ child.id }}" data-subbranch="{{ sub.id }}" onchange="onFilterChange(this)"
-                  {{ 'checked' if sub.id in active_subbranch_ids }}>
-                {{ sub._name }}
-              </label>
-              {% for topic in sub.get('children', []) %}
-              <div class="filter-topic">
-                <label class="filter-cb filter-topic-cb">
-                  <input type="checkbox" class="topic-cb" data-science="{{ s.id }}" data-branch="{{ child.id }}" data-subbranch="{{ sub.id }}" data-topic="{{ topic.id }}" onchange="onFilterChange(this)"
-                    {{ 'checked' if topic.id in active_topic_ids }}>
-                  {{ topic._name }}
-                </label>
-              </div>
-              {% endfor %}
-            </div>
-            {% endfor %}
-            {% else %}
-            {% for topic in gchildren %}
-            <div class="filter-topic">
-              <label class="filter-cb filter-topic-cb">
-                <input type="checkbox" class="topic-cb" data-science="{{ s.id }}" data-branch="{{ child.id }}" data-topic="{{ topic.id }}" onchange="onFilterChange(this)"
-                  {{ 'checked' if topic.id in active_topic_ids }}>
-                {{ topic._name }}
-              </label>
-            </div>
-            {% endfor %}
-            {% endif %}
+        <div class="section-label-row">
+          <div class="section-label">Filter</div>
+          <div class="filter-buttons">
+            <button class="filter-btn" id="tree-select-all" type="button" title="Select all topics">Select all</button>
+            <button class="filter-btn" id="tree-deselect-all" type="button" title="Deselect all topics">Deselect</button>
           </div>
-          {% endfor %}
         </div>
-        {% endfor %}
+        <div id="science-tree"></div>
       </div>
     </div>
   </div>
@@ -543,219 +525,104 @@
       setTimeout(function() { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(function() { t.remove(); }, 300); }, 4000);
     }
 
-    // Filter checkbox propagation
-    function onFilterChange(el) {
-      el.indeterminate = false;
-      if (el.classList.contains('science-cb')) {
-        _propagateScience(el);
-      } else if (el.classList.contains('branch-cb')) {
-        _propagateBranch(el);
-      } else if (el.classList.contains('subbranch-cb')) {
-        _propagateSubbranch(el);
-      } else if (el.classList.contains('topic-cb')) {
-        _propagateTopic(el);
+    // jsTree-backed topic filter
+    (function() {
+      var treeData;
+      try {
+        treeData = {{ tree_json|tojson|safe }};
+      } catch (e) {
+        treeData = [];
       }
-      _refreshImplicit();
-      applyFilters();
-    }
-    function _propagateBranch(el) {
-      var sid = el.dataset.science;
-      var bid = el.dataset.branch;
-      var subbranches = document.querySelectorAll('.subbranch-cb[data-branch="' + bid + '"]');
-      var topics = document.querySelectorAll('.topic-cb[data-branch="' + bid + '"]');
-      if (subbranches.length > 0) {
-        subbranches.forEach(function(sb) {
-          sb.checked = el.checked;
-          sb.indeterminate = false;
-          var sbid = sb.dataset.subbranch;
-          document.querySelectorAll('.topic-cb[data-branch="' + bid + '"][data-subbranch="' + sbid + '"]').forEach(function(t) {
-            t.checked = el.checked;
-            t.indeterminate = false;
-          });
-        });
-      } else {
-        topics.forEach(function(t) {
-          t.checked = el.checked;
-          t.indeterminate = false;
-        });
-      }
-      _updateScienceParent(sid);
-    }
-    function _propagateSubbranch(el) {
-      var sid = el.dataset.science;
-      var bid = el.dataset.branch;
-      var sbid = el.dataset.subbranch;
-      var topics = document.querySelectorAll('.topic-cb[data-branch="' + bid + '"][data-subbranch="' + sbid + '"]');
-      topics.forEach(function(t) {
-        t.checked = el.checked;
-        t.indeterminate = false;
+      var $tree = $('#science-tree');
+      if (!$tree.length || typeof $.fn.jstree === 'undefined') return;
+      /* disable dblclick toggling — clicking twice on a leaf shouldn't do anything */
+      $tree.on('dblclick.jstree', function(e) { e.stopPropagation(); });
+      $tree.jstree({
+        core: {
+          data: treeData,
+          themes: { icons: false, dots: false },
+          dblclick_toggle: false,
+        },
+        checkbox: {
+          keep_selected_style: false,
+          three_state: true,
+          cascade: 'up+down+undetermined',
+        },
+        plugins: ['checkbox'],
       });
-      _updateBranchParent(sid, bid);
-      _updateScienceParent(sid);
-    }
-    function _propagateScience(el) {
-      var sid = el.dataset.science;
-      var branches = document.querySelectorAll('.branch-cb[data-science="' + sid + '"]');
-      branches.forEach(function(b) {
-        b.checked = el.checked;
-        b.indeterminate = false;
-        var bid = b.dataset.branch;
-        var subbranches = document.querySelectorAll('.subbranch-cb[data-branch="' + bid + '"]');
-        if (subbranches.length > 0) {
-          subbranches.forEach(function(sb) {
-            sb.checked = el.checked;
-            sb.indeterminate = false;
-            var sbid = sb.dataset.subbranch;
-            document.querySelectorAll('.topic-cb[data-branch="' + bid + '"][data-subbranch="' + sbid + '"]').forEach(function(t) {
-              t.checked = el.checked;
-              t.indeterminate = false;
-            });
-          });
-        } else {
-          document.querySelectorAll('.topic-cb[data-branch="' + bid + '"]').forEach(function(t) {
-            t.checked = el.checked;
-            t.indeterminate = false;
-          });
+      window._jstree = $tree.jstree(true);
+      $tree.on('ready.jstree', function() { restoreTreeFromUrl(); });
+    })();
+
+    document.getElementById('tree-select-all').addEventListener('click', function() {
+      if (window._jstree) { window._jstree.check_all(); applyFilters(); }
+    });
+    document.getElementById('tree-deselect-all').addEventListener('click', function() {
+      if (window._jstree) { window._jstree.uncheck_all(); applyFilters(); }
+    });
+    $('#science-tree').on('changed.jstree check_node.jstree uncheck_node.jstree', function() {
+      syncUndeterminedVisibility(); applyFilters();
+    });
+
+    (function() {
+      var tree = $('#science-tree')[0], timer = null;
+      var obs = new MutationObserver(function(muts) {
+        for (var i = 0; i < muts.length; i++) {
+          var m = muts[i];
+          if (m.type !== 'attributes') continue;
+          var c = m.target.className, o = m.oldValue || '';
+          if ((c.indexOf('jstree-undetermined') !== -1) !== (o.indexOf('jstree-undetermined') !== -1)) {
+            clearTimeout(timer);
+            timer = setTimeout(function() { syncUndeterminedVisibility(); }, 20);
+            return;
+          }
         }
       });
-    }
-    function _propagateTopic(el) {
-      var sid = el.dataset.science;
-      var bid = el.dataset.branch;
-      var sbid = el.dataset.subbranch;
-      var branchCb = document.querySelector('.branch-cb[data-science="' + sid + '"][data-branch="' + bid + '"]');
+      if (tree) obs.observe(tree, { attributes: true, subtree: true, attributeFilter: ['class'], attributeOldValue: true });
+    })();
 
-      if (el.checked && branchCb && branchCb.checked && !branchCb.indeterminate) {
-        var siblings;
-        if (sbid) {
-          siblings = document.querySelectorAll('.topic-cb[data-branch="' + bid + '"][data-subbranch="' + sbid + '"]');
-        } else {
-          siblings = document.querySelectorAll('.topic-cb[data-branch="' + bid + '"]');
-        }
-        siblings.forEach(function(t) {
-          t.checked = (t === el);
-          t.indeterminate = false;
-        });
-      }
-
-      if (sbid) {
-        _updateSubbranchParent(sid, bid, sbid);
-      } else {
-        _updateBranchParent(sid, bid);
-      }
-      _updateScienceParent(sid);
-    }
-    function _updateSubbranchParent(sid, bid, sbid) {
-      var sbCb = document.querySelector('.subbranch-cb[data-science="' + sid + '"][data-branch="' + bid + '"][data-subbranch="' + sbid + '"]');
-      if (!sbCb) return;
-      var topics = document.querySelectorAll('.topic-cb[data-branch="' + bid + '"][data-subbranch="' + sbid + '"]');
-      var checkedCount = 0;
-      topics.forEach(function(t) { if (t.checked) checkedCount++; });
-      if (checkedCount === 0) {
-        sbCb.checked = false;
-        sbCb.indeterminate = false;
-      } else if (checkedCount === topics.length) {
-        sbCb.checked = true;
-        sbCb.indeterminate = false;
-      } else {
-        sbCb.checked = false;
-        sbCb.indeterminate = true;
-      }
-      _updateBranchParent(sid, bid);
-    }
-    function _updateBranchParent(sid, bid) {
-      var branchCb = document.querySelector('.branch-cb[data-science="' + sid + '"][data-branch="' + bid + '"]');
-      if (!branchCb) return;
-      var subbranches = document.querySelectorAll('.subbranch-cb[data-branch="' + bid + '"]');
-      var topics = document.querySelectorAll('.topic-cb[data-branch="' + bid + '"]');
-      var checkedCount;
-      var total;
-      if (subbranches.length > 0) {
-        checkedCount = 0;
-        subbranches.forEach(function(sb) { if (sb.checked || sb.indeterminate) checkedCount++; });
-        total = subbranches.length;
-      } else {
-        checkedCount = 0;
-        topics.forEach(function(t) { if (t.checked) checkedCount++; });
-        total = topics.length;
-      }
-      if (checkedCount === 0) {
-        branchCb.checked = false;
-        branchCb.indeterminate = false;
-      } else if (checkedCount === total) {
-        branchCb.checked = true;
-        branchCb.indeterminate = false;
-      } else {
-        branchCb.checked = false;
-        branchCb.indeterminate = true;
-      }
-    }
-    function _updateScienceParent(sid) {
-      var scienceCb = document.querySelector('.science-cb[data-science="' + sid + '"]');
-      if (!scienceCb) return;
-      var branches = document.querySelectorAll('.branch-cb[data-science="' + sid + '"]');
-      var checkedBranches = 0;
-      branches.forEach(function(b) { if (b.checked || b.indeterminate) checkedBranches++; });
-      if (checkedBranches === 0) {
-        scienceCb.checked = false;
-        scienceCb.indeterminate = false;
-      } else if (checkedBranches === branches.length) {
-        scienceCb.checked = true;
-        scienceCb.indeterminate = false;
-      } else {
-        scienceCb.checked = false;
-        scienceCb.indeterminate = true;
-      }
-    }
-    function _refreshImplicit() {
-      document.querySelectorAll('.science-cb').forEach(function(s) {
-        var sid = s.dataset.science;
-        var scienceFully = s.checked && !s.indeterminate;
-        document.querySelectorAll('.branch-cb[data-science="' + sid + '"]').forEach(function(b) {
-          var bid = b.dataset.branch;
-          var branchFully = b.checked && !b.indeterminate;
-          var branchImplicit = scienceFully && branchFully;
-          var subbranches = document.querySelectorAll('.subbranch-cb[data-branch="' + bid + '"]');
-          if (branchImplicit) {
-            b.dataset.implicit = '1';
-          } else {
-            delete b.dataset.implicit;
-          }
-          if (subbranches.length > 0) {
-            subbranches.forEach(function(sb) {
-              var sbFully = sb.checked && !sb.indeterminate;
-              var sbImplicit = branchFully && sbFully;
-              if (sbImplicit) {
-                sb.dataset.implicit = '1';
-              } else {
-                delete sb.dataset.implicit;
-              }
-              var sbid = sb.dataset.subbranch;
-              document.querySelectorAll('.topic-cb[data-branch="' + bid + '"][data-subbranch="' + sbid + '"]').forEach(function(t) {
-                var topicImplicit = sbFully;
-                if (topicImplicit) {
-                  t.dataset.implicit = '1';
-                } else {
-                  delete t.dataset.implicit;
-                }
-              });
-            });
-          } else {
-            document.querySelectorAll('.topic-cb[data-branch="' + bid + '"]').forEach(function(t) {
-              var topicImplicit = branchFully;
-              if (topicImplicit) {
-                t.dataset.implicit = '1';
-              } else {
-                delete t.dataset.implicit;
-              }
-            });
-          }
-        });
+    function syncUndeterminedVisibility() {
+      var tree = $('#science-tree');
+      tree.find('.jstree-node').removeClass('jstree-undetermined-parent');
+      tree.find('.jstree-undetermined').each(function() {
+        $(this).closest('.jstree-node').addClass('jstree-undetermined-parent');
       });
     }
-    function dimFilterChange() {
+
+    function dimFilterChange() { applyFilters(); }
+
+    document.getElementById('dim-reset').addEventListener('click', function() {
+      document.querySelectorAll('.filter-dim-row').forEach(function(row) {
+        row.querySelector('.dim-val').value = '';
+        row.querySelector('.dim-op').value = 'eq';
+      });
       applyFilters();
-    }
+    });
+    document.getElementById('dim-fill-zeros').addEventListener('click', function() {
+      document.querySelectorAll('.filter-dim-row').forEach(function(row) {
+        var input = row.querySelector('.dim-val');
+        if (input.value === '' || input.value === '-' || input.value === '+' || input.value === '.') {
+          input.value = '0';
+        }
+      });
+      applyFilters();
+    });
+
+    document.getElementById('qty-reset').addEventListener('click', function() {
+      window._qtySelected = [];
+      var input = document.getElementById('qty-search');
+      if (input) input.value = '';
+      if (typeof window.renderQtyChips === 'function') window.renderQtyChips();
+      if (typeof window.renderQtyResults === 'function') window.renderQtyResults('');
+      applyFilters();
+    });
+
+    document.getElementById('diff-reset').addEventListener('click', function() {
+      document.getElementById('diff-min').value = 0;
+      document.getElementById('diff-max').value = 10;
+      syncDiff();
+      applyFilters();
+    });
 
     // Quantity search filter (formulas view only)
     (function() {
@@ -907,66 +774,36 @@
     })();
 
     function applyFilters() {
+      if (window._restoringFilters) return;
       var url = buildFilterUrl();
       fetchContent(url, true);
     }
 
     function buildFilterUrl() {
-      var sciCbs = document.querySelectorAll('.science-cb');
-      var sciFullyChecked = [];
-      sciCbs.forEach(function(cb) {
-        if (cb.checked && !cb.indeterminate) sciFullyChecked.push(cb.dataset.science);
-      });
-
-      var brCbs = document.querySelectorAll('.branch-cb');
-      var brChecked = [];
-      brCbs.forEach(function(cb) {
-        if (cb.checked && !cb.indeterminate && sciFullyChecked.indexOf(cb.dataset.science) === -1) {
-          brChecked.push(cb.dataset.branch);
-        }
-      });
-
-      var sbCbs = document.querySelectorAll('.subbranch-cb');
-      var sbChecked = [];
-      sbCbs.forEach(function(cb) {
-        var bid = cb.dataset.branch;
-        var sid = cb.dataset.science;
-        if (cb.checked && !cb.indeterminate && brChecked.indexOf(bid) === -1 && sciFullyChecked.indexOf(sid) === -1) {
-          sbChecked.push(cb.dataset.subbranch);
-        }
-      });
-
-      var tpCbs = document.querySelectorAll('.topic-cb');
-      var tpChecked = [];
-      tpCbs.forEach(function(cb) {
-        var bid = cb.dataset.branch;
-        var sid = cb.dataset.science;
-        var sbid = cb.dataset.subbranch;
-        if (cb.checked && sbChecked.indexOf(sbid) === -1 && brChecked.indexOf(bid) === -1 && sciFullyChecked.indexOf(sid) === -1) {
-          tpChecked.push(cb.dataset.topic);
-        }
-      });
-
-      var allEmpty = sciFullyChecked.length === 0 && brChecked.length === 0 && sbChecked.length === 0 && tpChecked.length === 0;
+      var allIds = [];
+      var allRootSelected = false;
+      if (window._jstree) {
+        var selected = window._jstree.get_top_checked(true);
+        allIds = selected.map(function(n) { return n.id; });
+        var rootIds = window._jstree.get_node('#').children || [];
+        allRootSelected = rootIds.length > 0 && allIds.length === rootIds.length && allIds.every(function(id) { return rootIds.indexOf(id) !== -1; });
+      }
 
       var url = new URL(window.location);
-      if (allEmpty) {
-        url.searchParams.set('science', '_none_');
-        url.searchParams.delete('branch');
-        url.searchParams.delete('subbranch');
-        url.searchParams.delete('topic');
+      url.searchParams.delete('science');
+      url.searchParams.delete('branch');
+      url.searchParams.delete('subbranch');
+      url.searchParams.delete('topic');
+      url.searchParams.delete('id');
+      url.searchParams.delete('exclude_all');
+
+      if (allRootSelected) {
+        url.searchParams.delete('ids');
+      } else if (allIds.length === 0) {
+        url.searchParams.delete('exclude_all');
+        url.searchParams.set('ids', '');
       } else {
-        if (sciFullyChecked.length > 0 && sciFullyChecked.length < sciCbs.length) {
-          url.searchParams.set('science', sciFullyChecked.join(','));
-        } else {
-          url.searchParams.delete('science');
-        }
-        if (brChecked.length > 0) url.searchParams.set('branch', brChecked.join(','));
-        else url.searchParams.delete('branch');
-        if (sbChecked.length > 0) url.searchParams.set('subbranch', sbChecked.join(','));
-        else url.searchParams.delete('subbranch');
-        if (tpChecked.length > 0) url.searchParams.set('topic', tpChecked.join(','));
-        else url.searchParams.delete('topic');
+        url.searchParams.set('ids', allIds.join(','));
       }
 
       var min = parseInt(document.getElementById('diff-min').value);
@@ -987,15 +824,15 @@
         if (val !== '' && val !== '-' && val !== '+' && val !== '.') {
           var parsed = parseInt(val);
           if (!isNaN(parsed)) {
-            url.searchParams.set('dim_' + d + '_op', op);
-            url.searchParams.set('dim_' + d + '_val', parsed);
+            url.searchParams.set(d + '_o', op);
+            url.searchParams.set(d + '_v', parsed);
           } else {
-            url.searchParams.delete('dim_' + d + '_op');
-            url.searchParams.delete('dim_' + d + '_val');
+            url.searchParams.delete(d + '_o');
+            url.searchParams.delete(d + '_v');
           }
         } else {
-          url.searchParams.delete('dim_' + d + '_op');
-          url.searchParams.delete('dim_' + d + '_val');
+          url.searchParams.delete(d + '_o');
+          url.searchParams.delete(d + '_v');
         }
       });
 
@@ -1277,149 +1114,66 @@
 
     document.documentElement.classList.remove('suppress-transitions');
 
-    // Sync checkboxes with URL params (indeterminate states)
+    // Sync non-tree filter widgets (dim/qty/diff) and jsTree with the URL
+    // on initial load and browser back/forward.
+    function restoreTreeFromUrl() {
+      if (!window._jstree) return;
+      var url = new URL(window.location);
+      var idsParam = url.searchParams.get('ids');
+      var excludeAll = url.searchParams.get('exclude_all') === '1';
+      var hasIds = idsParam !== null && idsParam !== '';
+      window._restoringFilters = true;
+      window._jstree.uncheck_all();
+      if (excludeAll) {
+        /* exclude_all=1 → keep all unchecked */
+      } else if (idsParam === null) {
+        /* no ids param → all checked (fresh load) */
+        window._jstree.check_all();
+      } else if (!hasIds) {
+        /* ids= (empty) → keep all unchecked */
+      } else {
+        /* specific ids → check those */
+        window._jstree.check_node(idsParam.split(','));
+      }
+      window._restoringFilters = false;
+      syncUndeterminedVisibility();
+    }
+
     function restoreFiltersFromUrl() {
       var url = new URL(window.location);
-      var scienceParam = url.searchParams.get('science');
-      var branchParam = url.searchParams.get('branch');
-      var subbranchParam = url.searchParams.get('subbranch');
-      var topicParam = url.searchParams.get('topic');
-      var isNone = scienceParam === '_none_';
-      var activeSciences = (!isNone && scienceParam) ? scienceParam.split(',') : [];
-      var activeBranches = branchParam ? branchParam.split(',') : [];
-      var activeSubbranches = subbranchParam ? subbranchParam.split(',') : [];
-      var activeTopics = topicParam ? topicParam.split(',') : [];
-      var allSciences = document.querySelectorAll('.science-cb');
-      var hasAnyFilter = activeSciences.length > 0 || activeBranches.length > 0 || activeSubbranches.length > 0 || activeTopics.length > 0;
-
-      // Science checkboxes
-      allSciences.forEach(function(cb) {
-        var sid = cb.dataset.science;
-        var isInSciences = activeSciences.indexOf(sid) !== -1;
-        var hasIndirect = activeBranches.some(function(b) {
-          return document.querySelector('.branch-cb[data-science="' + sid + '"][data-branch="' + b + '"]');
-        }) || activeSubbranches.some(function(sb) {
-          return document.querySelector('.subbranch-cb[data-science="' + sid + '"][data-subbranch="' + sb + '"]');
-        }) || activeTopics.some(function(t) {
-          return document.querySelector('.topic-cb[data-science="' + sid + '"][data-topic="' + t + '"]');
-        });
-        if (isNone) {
-          cb.checked = false;
-          cb.indeterminate = false;
-        } else if (!hasAnyFilter) {
-          cb.checked = true;
-          cb.indeterminate = false;
-        } else if (isInSciences) {
-          cb.checked = true;
-          cb.indeterminate = false;
-        } else if (hasIndirect) {
-          cb.checked = false;
-          cb.indeterminate = true;
-        } else {
-          cb.checked = false;
-          cb.indeterminate = false;
-        }
-      });
-
-      // Branch checkboxes
-      document.querySelectorAll('.branch-cb').forEach(function(cb) {
-        var bid = cb.dataset.branch;
-        var sid = cb.dataset.science;
-        var scienceCb = document.querySelector('.science-cb[data-science="' + sid + '"]');
-
-        if (activeBranches.indexOf(bid) !== -1) {
-          cb.checked = true;
-          cb.indeterminate = false;
-          return;
-        }
-        if (!hasAnyFilter && scienceCb && scienceCb.checked && !scienceCb.indeterminate) {
-          cb.checked = true;
-          cb.indeterminate = false;
-          return;
-        }
-        var hasIndirect = activeSubbranches.some(function(sb) {
-          return document.querySelector('.subbranch-cb[data-science="' + sid + '"][data-branch="' + bid + '"][data-subbranch="' + sb + '"]');
-        }) || activeTopics.some(function(t) {
-          return document.querySelector('.topic-cb[data-science="' + sid + '"][data-branch="' + bid + '"][data-topic="' + t + '"]');
-        });
-        cb.checked = false;
-        cb.indeterminate = hasIndirect;
-      });
-
-      // Subbranch checkboxes
-      document.querySelectorAll('.subbranch-cb').forEach(function(cb) {
-        var sbid = cb.dataset.subbranch;
-        var bid = cb.dataset.branch;
-        var sid = cb.dataset.science;
-        var branchCb = document.querySelector('.branch-cb[data-branch="' + bid + '"]');
-
-        if (activeSubbranches.indexOf(sbid) !== -1) {
-          cb.checked = true;
-          cb.indeterminate = false;
-          return;
-        }
-        if (branchCb && branchCb.checked && !branchCb.indeterminate) {
-          cb.checked = true;
-          cb.indeterminate = false;
-          return;
-        }
-        var hasIndirect = activeTopics.some(function(t) {
-          return document.querySelector('.topic-cb[data-science="' + sid + '"][data-branch="' + bid + '"][data-subbranch="' + sbid + '"][data-topic="' + t + '"]');
-        });
-        cb.checked = false;
-        cb.indeterminate = hasIndirect;
-      });
 
       // Dimension filter
-      var dims = ['M','L','T','I','\u0398','N','J'];
-      dims.forEach(function(d) {
+      ['M','L','T','I','\u0398','N','J'].forEach(function(d) {
         var rows = document.querySelectorAll('.filter-dim-row[data-dim="' + d + '"]');
         if (rows.length === 0) return;
         var row = rows[0];
-        var op = url.searchParams.get('dim_' + d + '_op') || 'eq';
-        var val = url.searchParams.get('dim_' + d + '_val');
-        row.querySelector('.dim-op').value = op;
+        row.querySelector('.dim-op').value = url.searchParams.get(d + '_o') || 'eq';
+        var val = url.searchParams.get(d + '_v');
         row.querySelector('.dim-val').value = (val !== null ? val : '');
       });
 
-      // Quantity filter (chips only — don't show dropdown)
+      // Quantity filter (chips only — dropdown stays hidden)
       if (typeof renderQtyChips === 'function') {
         var qtyParam = url.searchParams.get('qty');
-        var activeQties = qtyParam ? qtyParam.split(',') : [];
-        window._qtySelected = activeQties;
+        window._qtySelected = qtyParam ? qtyParam.split(',') : [];
         renderQtyChips();
-        // Ensure dropdown stays hidden on URL restoration (popstate / initial load)
-        var el = document.getElementById('qty-results');
-        if (el) el.classList.remove('open');
+        var qr = document.getElementById('qty-results');
+        if (qr) qr.classList.remove('open');
       }
 
-      // Topic checkboxes
-      document.querySelectorAll('.topic-cb').forEach(function(cb) {
-        var tid = cb.dataset.topic;
-        var bid = cb.dataset.branch;
-        var sbid = cb.dataset.subbranch;
-        var branchCb = document.querySelector('.branch-cb[data-branch="' + bid + '"]');
-        if (branchCb && branchCb.checked && !branchCb.indeterminate) {
-          cb.checked = true;
-          cb.indeterminate = false;
-          return;
-        }
-        if (sbid) {
-          var sbCb = document.querySelector('.subbranch-cb[data-branch="' + bid + '"][data-subbranch="' + sbid + '"]');
-          if (sbCb && sbCb.checked && !sbCb.indeterminate) {
-            cb.checked = true;
-            cb.indeterminate = false;
-            return;
-          }
-        }
-        cb.checked = activeTopics.indexOf(tid) !== -1;
-        cb.indeterminate = false;
-      });
-      _refreshImplicit();
+      // Difficulty filter
+      var diffMin = parseInt(url.searchParams.get('diff_min'));
+      var diffMax = parseInt(url.searchParams.get('diff_max'));
+      var dMinEl = document.getElementById('diff-min');
+      var dMaxEl = document.getElementById('diff-max');
+      if (!isNaN(diffMin)) dMinEl.value = diffMin;
+      if (!isNaN(diffMax)) dMaxEl.value = diffMax;
+      syncDiff();
     }
     restoreFiltersFromUrl();
     window.addEventListener('popstate', function() {
       restoreFiltersFromUrl();
+      restoreTreeFromUrl();
     });
 
     // Copy formula
@@ -1433,7 +1187,7 @@
       if (fmt === 'latex') {
         doCopy = navigator.clipboard.writeText(tex);
       } else if (fmt === 'unicode') {
-        doCopy = import('https://cdn.jsdelivr.net/npm/unicodeit@latest/+esm').then(function(mod) {
+        doCopy = import('https://cdn.jsdelivr.net/npm/unicodeit@0.7.5/+esm').then(function(mod) {
           return navigator.clipboard.writeText(mod.replace(tex));
         });
       } else if (fmt === 'image') {
@@ -1511,6 +1265,7 @@
         if (!link) return;
         var href = link.getAttribute('href');
         if (!href || href.startsWith('http') || href.startsWith('//') || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('javascript:') || link.hasAttribute('download') || link.getAttribute('target') === '_blank') return;
+        if (href === '/') { window.location.href = '/'; return; }
         e.preventDefault();
         if (href.indexOf('?') === -1) {
           var params = window.location.search;

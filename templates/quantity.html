@@ -6,18 +6,18 @@
 
 {% if q.science_id %}
 <div class="breadcrumb-bar">
-  <a href="/quantities?science={{ q.science_id }}">{{ q.science }}</a>
+  <a href="/quantities?ids={{ q.science_id }}">{{ q.science }}</a>
   {% if q.branch_id %}
   &gt;
-  <a href="/quantities?science={{ q.science_id }}&amp;branch={{ q.branch_id }}">{{ q.branch }}</a>
+  <a href="/quantities?ids={{ q.branch_id }}">{{ q.branch }}</a>
   {% endif %}
   {% if q.subbranch_id %}
   &gt;
-  <a href="/quantities?science={{ q.science_id }}&amp;branch={{ q.branch_id }}&amp;subbranch={{ q.subbranch_id }}">{{ q.subbranch }}</a>
+  <a href="/quantities?ids={{ q.subbranch_id }}">{{ q.subbranch }}</a>
   {% endif %}
   {% if q.topic_id %}
   &gt;
-  <a href="/quantities?science={{ q.science_id }}&amp;branch={{ q.branch_id }}&amp;subbranch={{ q.subbranch_id }}&amp;topic={{ q.topic_id }}">{{ q.topic }}</a>
+  <a href="/quantities?ids={{ q.topic_id }}">{{ q.topic }}</a>
   {% endif %}
 </div>
 {% endif %}
@@ -74,25 +74,19 @@
   <table class="units-table">
     <thead>
       <tr>
-        <th>Symbol</th>
         <th>Unit</th>
         <th>System</th>
-        <th>Factor to ${{ render_symbol(si_unit_symbol) }}$</th>
-        {% if show_offset %}
-        <th>Offset from ${{ render_symbol(si_unit_symbol) }}$</th>
-        {% endif %}
+        {% if show_factor %}<th>Factor</th>{% endif %}
+        {% if show_offset %}<th>Offset</th>{% endif %}
       </tr>
     </thead>
     <tbody>
     {% for u in units %}
       <tr>
-        <td>${{ render_symbol(u.symbol) }}$</td>
-        <td>{{ unit_name(u.id) }}</td>
+        <td>${{ u.symbol_latex }}$ {{ u.name_html }}</td>
         <td>{{ u.unit_system or "any" }}</td>
-        <td>{% if u.factor == 1 %}&ndash;{% else %}&times;{{ u.factor }}{% endif %}</td>
-        {% if show_offset %}
-        <td>{% if u.offset == 0 %}&ndash;{% else %}{{ u.offset }}{% endif %}</td>
-        {% endif %}
+        {% if show_factor %}<td>{% if u.factor == 1 %}&ndash;{% else %}&times;{{ u.factor }}{% endif %}</td>{% endif %}
+        {% if show_offset %}<td>{% if u.offset == 0 %}&ndash;{% else %}+{{ u.offset }}{% endif %}</td>{% endif %}
       </tr>
     {% endfor %}
     </tbody>
