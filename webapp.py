@@ -141,7 +141,7 @@ def parse_filter_state(args) -> FilterState:
 # Science tree helpers
 # ---------------------------------------------------------------------------
 
-SCIENCES_PATH = _PROJECT_DIR / "sciences.json"
+TREE_PATH = _PROJECT_DIR / "tree.json"
 _tree_cache = None
 
 
@@ -149,10 +149,10 @@ def _sciences_tree():
     global _tree_cache
     if _tree_cache is None:
         try:
-            with open(SCIENCES_PATH) as f:
+            with open(TREE_PATH) as f:
                 _tree_cache = json.load(f).get("sciences", [])
         except (OSError, ValueError) as exc:
-            logger.warning("Failed to load sciences.json: %s", exc)
+            logger.warning("Failed to load tree.json: %s", exc)
             _tree_cache = []
     return _tree_cache
 

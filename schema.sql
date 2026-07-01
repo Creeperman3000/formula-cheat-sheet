@@ -7,10 +7,10 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS formula (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL,       -- JSON i18n: {"en-us":"...","en-uk":"..."}
-    science     TEXT,                -- ID into sciences.json
-    branch      TEXT,                -- ID into sciences.json
-    subbranch   TEXT,                -- ID into sciences.json (optional)
-    topic       TEXT,                -- ID into sciences.json
+    science     TEXT,                -- ID into tree.json
+    branch      TEXT,                -- ID into tree.json
+    subbranch   TEXT,                -- ID into tree.json (optional)
+    topic       TEXT,                -- ID into tree.json
     difficulty  INTEGER CHECK (difficulty BETWEEN 1 AND 10),
     description TEXT,                -- JSON i18n
     links       TEXT,                -- JSON array: [{"label":{i18n},"url":"..."}]
@@ -75,10 +75,10 @@ CREATE TABLE IF NOT EXISTS quantity (
     name        TEXT NOT NULL,       -- JSON i18n
     symbol      TEXT NOT NULL,
     symbol_overwrite TEXT,           -- JSON i18n override of quantity symbol
-    science     TEXT,                -- ID into sciences.json
-    branch      TEXT,                -- ID into sciences.json
-    subbranch   TEXT,                -- ID into sciences.json (optional)
-    topic       TEXT,                -- ID into sciences.json
+    science     TEXT,                -- ID into tree.json
+    branch      TEXT,                -- ID into tree.json
+    subbranch   TEXT,                -- ID into tree.json (optional)
+    topic       TEXT,                -- ID into tree.json
     difficulty  INTEGER CHECK (difficulty BETWEEN 1 AND 10),
     description TEXT,                -- JSON i18n
     links       TEXT,                -- JSON array

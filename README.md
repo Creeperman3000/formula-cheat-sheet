@@ -31,7 +31,7 @@ python scifind_cli.py list          # browse formulas
 | `seed.sql` | Core seed data (formulas, quantities, units) |
 | `seed_units.sql` | Additional SI and non-SI units |
 | `seed_formulas.sql` | Extended formulas across sciences |
-| `sciences.json` | Science/branch/topic tree with translations |
+| `tree.json` | Science/branch/topic tree with translations |
 | `templates/` | Jinja2 templates |
 | `wiki/` | Documentation |
 | `requirements.txt` | Python dependencies |
