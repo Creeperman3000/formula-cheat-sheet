@@ -24,7 +24,7 @@ python scifind_cli.py list          # browse formulas
 | Path | Purpose |
 | ---- | ------- |
 | `scifind_cli.py` | CLI entry point |
-| `scifind_lib.py` | Database, rendering, i18n, import/export |
+| `scifind_lib.py` | Database, rendering, i18n, export |
 | `webapp.py` | Flask web application |
 | `formulas.db` | Pre-built database (auto-regenerated on first run if missing) |
 | `schema.sql` | Database schema (6 tables, 3 FTS5 indexes) |

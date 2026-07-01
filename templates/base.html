@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/jstree.min.css') }}">
   <script src="{{ url_for('static', filename='js/jquery.min.js') }}"></script>
   <script src="{{ url_for('static', filename='js/jstree.min.js') }}"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -69,6 +70,8 @@
     .topbar-left { display: flex; align-items: center; gap: 8px; flex-shrink: 1; min-width: 0; overflow: hidden; }
     .topbar-right { display: flex; align-items: center; gap: 4px; flex-shrink: 0; margin-left: auto; }
     .topbar-btn { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: none; background: none; cursor: pointer; border-radius: 6px; color: var(--text); flex-shrink: 0; }
+.topbar-btn svg { display: block; }
+#left-sidebar-icon, #right-sidebar-icon { display: flex; }
     .topbar-btn:hover { background: var(--bg-secondary); }
     .topbar-logo { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1.1rem; color: var(--text); flex-shrink: 0; min-width: 24px; }
     .topbar-logo svg { stroke: var(--accent); flex-shrink: 0; }
@@ -107,12 +110,16 @@
     .settings-divider { height: 1px; background: var(--border); margin: 4px 0; }
 
     /* Filter button rows */
-    .filter-buttons { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; }
-    .filter-btn { font-size: 0.72rem; padding: 3px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); cursor: pointer; line-height: 1.4; }
-    .filter-btn:hover { background: var(--bg-secondary); border-color: var(--accent); }
-    .filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-    .filter-btn-link { font-size: 0.72rem; padding: 3px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); text-decoration: none; line-height: 1.4; display: inline-block; cursor: pointer; }
-    .filter-btn-link:hover { background: var(--bg-secondary); border-color: var(--accent); text-decoration: none; }
+    .filter-buttons { display: flex; gap: 0; }
+    .filter-btn { padding: 2px; border: none; background: none; color: var(--text); cursor: pointer; line-height: 1; border-radius: 4px; }
+    .filter-btn:hover { background: var(--bg-secondary); }
+    .filter-btn.active { color: var(--accent); background: var(--bg-tertiary); }
+    .filter-btn.disabled { opacity: 0.35; pointer-events: none; }
+
+    .filter-btn-link { padding: 2px; border: none; background: none; color: var(--text); text-decoration: none; line-height: 1; cursor: pointer; border-radius: 4px; }
+    .filter-btn-link:hover { background: var(--bg-secondary); text-decoration: none; }
+    .filter-btn-link.active { color: var(--accent); background: var(--bg-tertiary); }
+    .filter-btn svg, .filter-btn-link svg { vertical-align: middle; display: block; }
 
     /* Section heading with reset button */
     .section-label-row { display: flex; align-items: center; justify-content: space-between; margin: 12px 0 6px; }
@@ -150,6 +157,10 @@
     #sidebar-right .jstree-default .jstree-open:hover > .jstree-ocl { opacity: 1; }
     /* Remove hover highlight on nodes */
     #sidebar-right .jstree-default .jstree-hovered { background: transparent !important; box-shadow: none !important; }
+    /* Root-level nodes (no parents): bold */
+    #sidebar-right .jstree-container-ul > .jstree-node > .jstree-anchor { font-weight: 600; }
+    /* Leaf nodes (no children): secondary text color */
+    #sidebar-right .jstree-leaf > .jstree-anchor { color: var(--text-secondary); }
 
     /* Body layout (flex) */
     .body-wrap { display: flex; height: calc(100vh - var(--topbar-height)); overflow: hidden; }
@@ -306,13 +317,7 @@
   <div class="topbar">
     <div class="topbar-left">
       <button class="topbar-btn" onclick="toggleSidebar('left')" title="Toggle sidebar" aria-label="Toggle left sidebar">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="4" />
-          <line x1="9" y1="3" x2="9" y2="21" />
-          <line x1="5.5" y1="7.5" x2="7.5" y2="7.5" />
-          <line x1="5.5" y1="12" x2="7.5" y2="12" />
-          <line x1="5.5" y1="16.5" x2="7.5" y2="16.5" />
-        </svg>
+        <span id="left-sidebar-icon"><i data-lucide="panel-left-close" width="18" height="18"></i></span>
       </button>
       <a href="/" class="topbar-logo">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M6 12h12"/></svg>
@@ -322,23 +327,23 @@
     <div class="topbar-search">
       <form action="/search" method="get">
         <span class="search-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <i data-lucide="search" width="16" height="16"></i>
         </span>
         <input type="text" name="q" placeholder="Find formulas, quantities, units" value="{{ request.args.get('q', '') }}">
         <button type="button" class="search-cancel" onclick="exitSearch()" aria-label="Cancel search">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <i data-lucide="x" width="16" height="16"></i>
         </button>
       </form>
     </div>
     <div class="topbar-right">
       <div class="topbar-search-icon">
         <button class="topbar-btn" onclick="enterSearch()" title="Search" aria-label="Search">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <i data-lucide="search" width="16" height="16"></i>
         </button>
       </div>
       <div class="settings-wrap">
         <button class="topbar-btn" onclick="toggleSettings(event)" title="Settings" aria-label="Settings">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <i data-lucide="settings" width="18" height="18"></i>
         </button>
         <div class="settings-menu" id="settings-menu">
           <div class="settings-item">
@@ -377,24 +382,10 @@
               <button type="submit">Download</button>
             </form>
           </div>
-          <div class="settings-item">
-            <span>Import</span>
-            <form method="post" action="/import" enctype="multipart/form-data" id="import-form" style="display:none"></form>
-            <label style="font-size:0.85rem;cursor:pointer;padding:4px 12px;border:1px solid var(--border);border-radius:4px;">
-              Upload
-              <input type="file" form="import-form" name="file" accept=".csv,.zip,.xlsx,.ods" onchange="document.getElementById('import-form').submit()" style="display:none">
-            </label>
-          </div>
         </div>
       </div>
       <button class="topbar-btn" onclick="toggleSidebar('right')" title="Toggle tree" aria-label="Toggle right sidebar">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="4" />
-          <line x1="15" y1="3" x2="15" y2="21" />
-          <line x1="16.5" y1="7.5" x2="18.5" y2="7.5" />
-          <line x1="16.5" y1="12" x2="18.5" y2="12" />
-          <line x1="16.5" y1="16.5" x2="18.5" y2="16.5" />
-        </svg>
+        <span id="right-sidebar-icon"><i data-lucide="panel-right-close" width="18" height="18"></i></span>
       </button>
     </div>
   </div>
@@ -427,11 +418,14 @@
         </div>
 
         <div class="dim-filter-loadable" id="dim-filter-area">
-        <div class="section-label">Dimension</div>
-        <div class="filter-buttons">
-          <a class="filter-btn-link" href="/quantities?is_dim=1">Base quantities</a>
-          <button class="filter-btn" id="dim-fill-zeros" type="button" title="Set empty dimension fields to 0">Fill empty</button>
-          <button class="filter-btn" id="dim-reset" type="button" title="Clear all dimension filters">Reset</button>
+        <div class="section-label-row">
+          <div class="section-label">Dimension</div>
+          <div class="filter-buttons">
+            <button class="filter-btn{{ ' active' if dim_mode == 'or' }}" id="dim-mode-toggle" type="button" title="Dimension filter mode: {{ 'AND' if dim_mode != 'or' else 'OR' }}" style="display:none"><i data-lucide="{{ 'squares-unite' if dim_mode == 'or' else 'squares-intersect' }}" width="16" height="16"></i></button>
+            <button class="filter-btn" id="dim-base-qty" type="button" title="Base quantities"><i data-lucide="ruler" width="16" height="16"></i></button>
+            <button class="filter-btn" id="dim-fill-zeros" type="button" title="Set empty dimension fields to 0"><i data-lucide="paint-bucket" width="16" height="16"></i></button>
+            <button class="filter-btn" id="dim-reset" type="button" title="Clear all dimension filters"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
+          </div>
         </div>
         {% for dsym in ['M','L','T','I','Θ','N','J'] %}
         {% set df = dim_filter.get(dsym, {'op': 'eq', 'val': None}) %}
@@ -440,8 +434,8 @@
           <span class="dim-symbol">${{ ds }}$</span>
           <select class="dim-op" onchange="dimFilterChange()">
             <option value="eq"{{ ' selected' if df.op == 'eq' }}> =</option>
-            <option value="gte"{{ ' selected' if df.op == 'gte' }}> ≥</option>
-            <option value="lte"{{ ' selected' if df.op == 'lte' }}> ≤</option>
+            <option value="geq"{{ ' selected' if df.op == 'geq' }}> ≥</option>
+            <option value="leq"{{ ' selected' if df.op == 'leq' }}> ≤</option>
           </select>
           <input type="number" class="dim-val" value="{{ df.val if df.val is not none else '' }}" step="1" onchange="dimFilterChange()" oninput="dimFilterChange()" placeholder="0">
         </div>
@@ -452,7 +446,8 @@
         <div class="section-label-row">
           <div class="section-label">Quantity</div>
           <div class="filter-buttons">
-            <button class="filter-btn" id="qty-reset" type="button" title="Clear quantity filter">Reset</button>
+            <button class="filter-btn{{ ' active' if (qty_mode == 'and') != (current_view == 'formulas') }}" id="qty-mode-toggle" type="button" title="Quantity filter mode: {{ 'AND' if qty_mode == 'and' else 'OR' }}" style="display:none"><i data-lucide="{{ 'squares-intersect' if qty_mode == 'and' else 'squares-unite' }}" width="16" height="16"></i></button>
+            <button class="filter-btn" id="qty-reset" type="button" title="Clear quantity filter"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
           </div>
         </div>
         <div class="filter-qty-search-wrap">
@@ -467,7 +462,7 @@
           <div class="section-label-row">
             <div class="diff-label">Difficulty</div>
             <div class="filter-buttons">
-              <button class="filter-btn" id="diff-reset" type="button" title="Reset difficulty range">Reset</button>
+              <button class="filter-btn" id="diff-reset" type="button" title="Reset difficulty range"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
             </div>
           </div>
           <div class="diff-sliders">
@@ -499,8 +494,8 @@
         <div class="section-label-row">
           <div class="section-label">Filter</div>
           <div class="filter-buttons">
-            <button class="filter-btn" id="tree-select-all" type="button" title="Select all topics">Select all</button>
-            <button class="filter-btn" id="tree-deselect-all" type="button" title="Deselect all topics">Deselect</button>
+            <button class="filter-btn" id="tree-deselect-all" type="button" title="Deselect all topics"><i data-lucide="eraser" width="16" height="16"></i></button>
+            <button class="filter-btn" id="tree-select-all" type="button" title="Reset topic selection"><i data-lucide="rotate-ccw" width="16" height="16"></i></button>
           </div>
         </div>
         <div id="science-tree"></div>
@@ -551,7 +546,9 @@
         plugins: ['checkbox'],
       });
       window._jstree = $tree.jstree(true);
-      $tree.on('ready.jstree', function() { restoreTreeFromUrl(); });
+      $tree.on('ready.jstree', function() { restoreTreeFromUrl();           syncFilterStates();
+          syncViewTabLinks();
+        });
     })();
 
     document.getElementById('tree-select-all').addEventListener('click', function() {
@@ -562,6 +559,7 @@
     });
     $('#science-tree').on('changed.jstree check_node.jstree uncheck_node.jstree', function() {
       syncUndeterminedVisibility(); applyFilters();
+      setTimeout(syncFilterStates, 0);
     });
 
     (function() {
@@ -589,7 +587,7 @@
       });
     }
 
-    function dimFilterChange() { applyFilters(); }
+    function dimFilterChange() { applyFilters(); setTimeout(syncFilterStates, 0); }
 
     document.getElementById('dim-reset').addEventListener('click', function() {
       document.querySelectorAll('.filter-dim-row').forEach(function(row) {
@@ -599,13 +597,181 @@
       applyFilters();
     });
     document.getElementById('dim-fill-zeros').addEventListener('click', function() {
-      document.querySelectorAll('.filter-dim-row').forEach(function(row) {
-        var input = row.querySelector('.dim-val');
-        if (input.value === '' || input.value === '-' || input.value === '+' || input.value === '.') {
-          input.value = '0';
-        }
+      var allFilled = true, hasZero = false;
+      document.querySelectorAll('.filter-dim-row .dim-val').forEach(function(input) {
+        var v = input.value.trim();
+        if (v === '') allFilled = false;
+        else if (v === '0') hasZero = true;
       });
+      if (allFilled && hasZero) {
+        document.querySelectorAll('.filter-dim-row .dim-val').forEach(function(input) {
+          if (input.value.trim() === '0') input.value = '';
+        });
+      } else {
+        document.querySelectorAll('.filter-dim-row').forEach(function(row) {
+          var input = row.querySelector('.dim-val');
+          if (input.value === '' || input.value === '-' || input.value === '+' || input.value === '.') {
+            input.value = '0';
+          }
+        });
+      }
       applyFilters();
+    });
+
+    document.getElementById('dim-mode-toggle').addEventListener('click', function() {
+      var url = new URL(window.location);
+      var switched = (url.searchParams.get('mode_switched') || '').split(',').filter(Boolean);
+      var idx = switched.indexOf('dim');
+      if (idx !== -1) switched.splice(idx, 1);
+      else switched.push('dim');
+      if (switched.length) url.searchParams.set('mode_switched', switched.join(','));
+      else url.searchParams.delete('mode_switched');
+      fetchContent(url.pathname + url.search, true);
+    });
+
+    document.getElementById('dim-base-qty').addEventListener('click', function() {
+      var url = new URL(window.location);
+      if (url.searchParams.get('is_dim') === '1') {
+        url.searchParams.delete('is_dim');
+      } else {
+        url.searchParams.set('is_dim', '1');
+      }
+      fetchContent(url.pathname + url.search, true);
+    });
+
+    function getSwitched(url) {
+      return (url.searchParams.get('mode_switched') || '').split(',').filter(Boolean);
+    }
+
+    function syncFilterStates() {
+      var url = new URL(window.location);
+
+      // Clean up mode_switched — remove entries whose filter has <2 items
+      cleanModeSwitched(url);
+
+      // Dim mode toggle (AND/OR) — visible when ≥2 dim fields have values
+      var modeBtn = document.getElementById('dim-mode-toggle');
+      if (modeBtn) {
+        var filledCount = 0;
+        document.querySelectorAll('.filter-dim-row .dim-val').forEach(function(input) {
+          if (input.value.trim() !== '') filledCount++;
+        });
+        if (filledCount >= 2) {
+          modeBtn.style.display = '';
+          var switched = getSwitched(url);
+          var isOr = switched.indexOf('dim') !== -1;
+          modeBtn.classList.toggle('active', isOr);
+          modeBtn.title = isOr ? 'Dimension filter mode: OR' : 'Dimension filter mode: AND';
+          modeBtn.innerHTML = '<i data-lucide="' + (isOr ? 'squares-unite' : 'squares-intersect') + '" width="16" height="16"></i>';
+          if (typeof lucide !== 'undefined') lucide.createIcons();
+        } else {
+          modeBtn.style.display = 'none';
+        }
+      }
+
+      // Base quantities toggle
+      var baseQtyBtn = document.getElementById('dim-base-qty');
+      if (baseQtyBtn) {
+        baseQtyBtn.classList.toggle('active', url.searchParams.get('is_dim') === '1');
+        baseQtyBtn.classList.toggle('disabled', isFormulasView());
+      }
+
+      // Fill zeros toggle
+      var fillBtn = document.getElementById('dim-fill-zeros');
+      if (fillBtn) {
+        var allFilled = true, hasZero = false;
+        document.querySelectorAll('.filter-dim-row .dim-val').forEach(function(input) {
+          var v = input.value.trim();
+          if (v === '') allFilled = false;
+          else if (v === '0') hasZero = true;
+        });
+        fillBtn.classList.toggle('active', allFilled && hasZero);
+        fillBtn.classList.toggle('disabled', allFilled && !hasZero);
+      }
+
+      // Deselect all toggle
+      var deselectBtn = document.getElementById('tree-deselect-all');
+      if (deselectBtn && window._jstree) {
+        var checked = window._jstree.get_checked(true);
+        deselectBtn.classList.toggle('disabled', checked.length === 0);
+      }
+
+      // Qty mode toggle (AND/OR) — visible when ≥2 quantities selected
+      var qtyModeBtn = document.getElementById('qty-mode-toggle');
+      if (qtyModeBtn) {
+        var qtyCount = (window._qtySelected || []).length;
+        if (qtyCount >= 2) {
+          qtyModeBtn.style.display = '';
+          var switched = getSwitched(url);
+          var key = isFormulasView() ? 'fml' : 'qty';
+          var isSwitched = switched.indexOf(key) !== -1;
+          qtyModeBtn.classList.toggle('active', isSwitched);
+          qtyModeBtn.classList.remove('inactive');
+          var isAnd = isFormulasView() ? !isSwitched : isSwitched;
+          qtyModeBtn.title = isAnd ? 'Quantity filter mode: AND' : 'Quantity filter mode: OR';
+          qtyModeBtn.innerHTML = '<i data-lucide="' + (isAnd ? 'squares-intersect' : 'squares-unite') + '" width="16" height="16"></i>';
+          if (typeof lucide !== 'undefined') lucide.createIcons();
+        } else {
+          qtyModeBtn.style.display = 'none';
+        }
+      }
+    }
+
+    function cleanModeSwitched(url) {
+      var raw = url.searchParams.get('mode_switched');
+      if (!raw) return;
+      var parts = raw.split(',').filter(Boolean);
+      var changed = false;
+
+      // Dim: count dimensions with any value from URL params
+      var dimCount = 0;
+      ['M','L','T','I','\u0398','N','J'].forEach(function(d) {
+        var hasVal = ['eq','geq','leq'].some(function(op) {
+          return url.searchParams.get(d + '_' + op) !== null;
+        });
+        if (hasVal) dimCount++;
+      });
+      if (dimCount < 2) { var idx = parts.indexOf('dim'); if (idx !== -1) { parts.splice(idx, 1); changed = true; } }
+
+      // Qty: count from URL qty param
+      var qtyParam = url.searchParams.get('qty');
+      var qtyCount = qtyParam ? qtyParam.split(',').length : 0;
+      if (qtyCount < 2) {
+        ['fml','qty'].forEach(function(k) { var idx; while ((idx = parts.indexOf(k)) !== -1) { parts.splice(idx, 1); changed = true; } });
+      }
+
+      if (changed) {
+        if (parts.length) url.searchParams.set('mode_switched', parts.join(','));
+        else url.searchParams.delete('mode_switched');
+        history.replaceState(null, '', url.toString());
+      }
+    }
+
+    function syncViewTabLinks() {
+      document.querySelectorAll('.view-tab').forEach(function(t) {
+        var href = t.getAttribute('href');
+        if (!href) return;
+        var base = href.split('?')[0];
+        var qs = window.location.search;
+        t.setAttribute('href', base + qs);
+      });
+    }
+
+    function isFormulasView() {
+      var p = window.location.pathname;
+      return p.indexOf('/quantities') === -1 && p.indexOf('/quantity/') === -1 && p.indexOf('/unit/') === -1;
+    }
+
+    document.getElementById('qty-mode-toggle').addEventListener('click', function() {
+      var url = new URL(window.location);
+      var switched = (url.searchParams.get('mode_switched') || '').split(',').filter(Boolean);
+      var key = isFormulasView() ? 'fml' : 'qty';
+      var idx = switched.indexOf(key);
+      if (idx !== -1) switched.splice(idx, 1);
+      else switched.push(key);
+      if (switched.length) url.searchParams.set('mode_switched', switched.join(','));
+      else url.searchParams.delete('mode_switched');
+      fetchContent(url.pathname + url.search, true);
     });
 
     document.getElementById('qty-reset').addEventListener('click', function() {
@@ -648,10 +814,11 @@
           var label = q ? (q.symbol || q.name || q.id) : qid;
           var display = window._renderLatex(label);
           html += '<span class="qty-chip" data-qty="' + qid + '">';
-          html += display + '<span class="qty-chip-x" onclick="removeQtyChip(\'' + qid + '\')">&times;</span>';
+          html += display + '<span class="qty-chip-x" onclick="removeQtyChip(\'' + qid + '\')"><i data-lucide="x" width="12" height="12"></i></span>';
           html += '</span>';
         });
         chipsEl.innerHTML = html;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
       };
 
       window.renderQtyResults = function(query) {
@@ -813,26 +980,18 @@
       if (max < 10) url.searchParams.set('diff_max', max);
       else url.searchParams.delete('diff_max');
 
-      // Dimension filter
+      // Dimension filter — encoded as {symbol}_{op}={value}  e.g. M_eq=1&L_gte=3
       var dims = ['M','L','T','I','\u0398','N','J'];
       dims.forEach(function(d) {
         var rows = document.querySelectorAll('.filter-dim-row[data-dim="' + d + '"]');
         if (rows.length === 0) return;
         var row = rows[0];
+        ['_o','_v','_eq','_geq','_leq'].forEach(function(s) { url.searchParams.delete(d + s); });
         var op = row.querySelector('.dim-op').value;
         var val = row.querySelector('.dim-val').value;
         if (val !== '' && val !== '-' && val !== '+' && val !== '.') {
           var parsed = parseInt(val);
-          if (!isNaN(parsed)) {
-            url.searchParams.set(d + '_o', op);
-            url.searchParams.set(d + '_v', parsed);
-          } else {
-            url.searchParams.delete(d + '_o');
-            url.searchParams.delete(d + '_v');
-          }
-        } else {
-          url.searchParams.delete(d + '_o');
-          url.searchParams.delete(d + '_v');
+          if (!isNaN(parsed)) url.searchParams.set(d + '_' + op, parsed);
         }
       });
 
@@ -880,6 +1039,9 @@
           } else {
             renderMath();
           }
+          restoreFiltersFromUrl();
+          if (typeof restoreTreeFromUrl === 'function') restoreTreeFromUrl();
+          syncFilterStates();
         })
         .catch(function(err) { if (err.name !== 'AbortError') console.warn('fetchContent error', err); })
         .then(function() { if (_pendingFetch === controller) _pendingFetch = null; });
@@ -898,6 +1060,21 @@
       } else {
         el.classList.toggle('collapsed');
       }
+      syncSidebarIcon(side);
+    }
+
+    function syncSidebarIcon(side) {
+      const el = document.getElementById('sidebar-' + side);
+      const iconWrap = document.getElementById(side + '-sidebar-icon');
+      if (!el || !iconWrap) return;
+      const isNarrow = window.innerWidth <= 768;
+      const collapsed = isNarrow ? !el.classList.contains('open') : el.classList.contains('collapsed');
+      const icons = {
+        left: collapsed ? 'panel-left-open' : 'panel-left-close',
+        right: collapsed ? 'panel-right-open' : 'panel-right-close'
+      };
+      iconWrap.innerHTML = '<i data-lucide="' + icons[side] + '" width="18" height="18"></i>';
+      if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
     // Search expand
@@ -913,6 +1090,8 @@
     function closeAllOverlays() {
       document.querySelectorAll('.sidebar.open').forEach(s => s.classList.remove('open'));
       document.getElementById('sidebar-backdrop').classList.remove('open');
+      syncSidebarIcon('left');
+      syncSidebarIcon('right');
     }
 
     // Settings menu
@@ -1086,18 +1265,22 @@
           if (!right.classList.contains('collapsed')) {
             right.classList.add('collapsed');
             rightCollapsed = true;
+            syncSidebarIcon('right');
           } else if (!left.classList.contains('collapsed')) {
             left.classList.add('collapsed');
             leftCollapsed = true;
+            syncSidebarIcon('left');
           }
         } else {
           // Room to expand - restore left first, then right
           if (leftCollapsed && left.classList.contains('collapsed')) {
             left.classList.remove('collapsed');
             leftCollapsed = false;
+            syncSidebarIcon('left');
           } else if (rightCollapsed && right.classList.contains('collapsed')) {
             right.classList.remove('collapsed');
             rightCollapsed = false;
+            syncSidebarIcon('right');
           }
         }
       }
@@ -1112,6 +1295,9 @@
       checkWidth();
     })();
 
+    lucide.createIcons();
+    syncSidebarIcon('left');
+    syncSidebarIcon('right');
     document.documentElement.classList.remove('suppress-transitions');
 
     // Sync non-tree filter widgets (dim/qty/diff) and jsTree with the URL
@@ -1142,14 +1328,18 @@
     function restoreFiltersFromUrl() {
       var url = new URL(window.location);
 
-      // Dimension filter
+      // Dimension filter — encoded as {symbol}_{op}={value}  e.g. M_eq=1&L_gte=3
       ['M','L','T','I','\u0398','N','J'].forEach(function(d) {
         var rows = document.querySelectorAll('.filter-dim-row[data-dim="' + d + '"]');
         if (rows.length === 0) return;
         var row = rows[0];
-        row.querySelector('.dim-op').value = url.searchParams.get(d + '_o') || 'eq';
-        var val = url.searchParams.get(d + '_v');
-        row.querySelector('.dim-val').value = (val !== null ? val : '');
+        var foundOp = 'eq', foundVal = null;
+        ['eq','geq','leq'].forEach(function(op) {
+          var v = url.searchParams.get(d + '_' + op);
+          if (v !== null) { foundOp = op; foundVal = v; }
+        });
+        row.querySelector('.dim-op').value = foundOp;
+        row.querySelector('.dim-val').value = (foundVal !== null ? foundVal : '');
       });
 
       // Quantity filter (chips only — dropdown stays hidden)
@@ -1171,9 +1361,11 @@
       syncDiff();
     }
     restoreFiltersFromUrl();
+    syncFilterStates();
     window.addEventListener('popstate', function() {
       restoreFiltersFromUrl();
       restoreTreeFromUrl();
+      syncFilterStates();
     });
 
     // Copy formula
@@ -1258,6 +1450,10 @@
             if (typeof renderMathInElement === 'function') try { renderMathInElement(document.getElementById('main-content'), {delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],macros:window._KATEX_MACROS}); } catch(e) { console.warn('renderMathInElement error', e); }
           }
           if (window.requestAnimationFrame) { requestAnimationFrame(renderMath); } else { renderMath(); }
+          if (typeof lucide !== 'undefined') lucide.createIcons();
+          restoreFiltersFromUrl();
+          if (typeof restoreTreeFromUrl === 'function') restoreTreeFromUrl();
+          syncFilterStates();
         }).catch(function() { window.location.href = url; });
       }
       document.body.addEventListener('click', function(e) {
@@ -1267,10 +1463,9 @@
         if (!href || href.startsWith('http') || href.startsWith('//') || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('javascript:') || link.hasAttribute('download') || link.getAttribute('target') === '_blank') return;
         if (href === '/') { window.location.href = '/'; return; }
         e.preventDefault();
-        if (href.indexOf('?') === -1) {
-          var params = window.location.search;
-          if (params) href += params;
-        }
+        var base = href.split('?')[0];
+        var params = window.location.search;
+        if (params) href = base + params;
         navigateTo(href);
       });
       window.addEventListener('popstate', function() { navigateTo(window.location.href, true); });

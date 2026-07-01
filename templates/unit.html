@@ -6,14 +6,13 @@
 
 {% if unit.quantity_id %}
 <div class="breadcrumb-bar">
-  <a href="/quantities?ids={{ unit.science_id }}">{{ unit.science }}</a>{% if unit.branch_id %}
+  {% if unit.breadcrumbs %}
+  {% for crumb in unit.breadcrumbs %}
+    {% if not loop.first %} &gt; {% endif %}
+    <a href="/quantities?ids={{ crumb.id }}">{{ crumb.name }}</a>
+  {% endfor %}
   &gt;
-  <a href="/quantities?ids={{ unit.branch_id }}">{{ unit.branch }}</a>{% endif %}{% if unit.subbranch_id %}
-  &gt;
-  <a href="/quantities?ids={{ unit.subbranch_id }}">{{ unit.subbranch }}</a>{% endif %}{% if unit.topic_id %}
-  &gt;
-  <a href="/quantities?ids={{ unit.topic_id }}">{{ unit.topic }}</a>{% endif %}
-  &gt;
+  {% endif %}
   <a href="/quantity/{{ unit.quantity_id }}">{{ unit.quantity_name }}</a>
 </div>
 {% endif %}

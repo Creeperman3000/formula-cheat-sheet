@@ -1,7 +1,7 @@
 """Shared library for Scifind.
 
 Database access, LaTeX rendering, dimension formatting, default unit parsing,
-and CSV/XLSX/ODS import/export.
+and CSV/XLSX/ODS export.
 """
 
 import csv
@@ -970,7 +970,7 @@ def fetch_formulas_with_all_quantities(conn, quantity_ids):
 
 
 # ---------------------------------------------------------------------------
-# Import / export
+# Export
 # ---------------------------------------------------------------------------
 
 EXPORT_TABLE_ORDER = [
@@ -1005,72 +1005,7 @@ EXPORT_TABLE_COLUMNS = {
     ],
 }
 
-REQUIRED_COLUMNS = {
-    "formula": {"id", "name"},
-    "formula_item": {"formula_id"},
-    "condition": {"formula_id", "replacement_formula_id"},
-    "formula_relation": {"formula_id", "related_id", "relation_type"},
-    "quantity": {"id", "name", "symbol"},
-    "unit": {"id", "name", "symbol", "quantity_id"},
-}
 
-IMPORT_INSERT_SQL = {
-    "formula": """INSERT INTO formula
-        (id, name, topic, difficulty, description, links)
-        VALUES (?,?,?,?,?,?)
-        ON CONFLICT(id) DO UPDATE SET
-            name=excluded.name, topic=excluded.topic,
-            difficulty=excluded.difficulty, description=excluded.description,
-            links=excluded.links""",
-    "formula_item": """INSERT INTO formula_item
-        (formula_id, term, is_primary, sort_order, coeff_value, latex_coef,
-         coeff_exponent, quantity_id, var_exponent, label,
-         symbol_overwrite, quantity_name_overwrite,
-         latex_prefix, latex_suffix)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        ON CONFLICT(formula_id, term, is_primary, sort_order) DO UPDATE SET
-            coeff_value=excluded.coeff_value, latex_coef=excluded.latex_coef,
-            coeff_exponent=excluded.coeff_exponent, quantity_id=excluded.quantity_id,
-            var_exponent=excluded.var_exponent, label=excluded.label,
-            symbol_overwrite=excluded.symbol_overwrite,
-            quantity_name_overwrite=excluded.quantity_name_overwrite,
-            latex_prefix=excluded.latex_prefix, latex_suffix=excluded.latex_suffix""",
-    "condition": """INSERT INTO condition
-        (name, formula_id, replacement_formula_id, default_on, sort_order)
-        VALUES (?,?,?,?,?)
-        ON CONFLICT(id) DO UPDATE SET
-            name=excluded.name, formula_id=excluded.formula_id,
-            replacement_formula_id=excluded.replacement_formula_id,
-            default_on=excluded.default_on, sort_order=excluded.sort_order""",
-    "formula_relation": """INSERT INTO formula_relation
-        (formula_id, related_id, relation_type)
-        VALUES (?,?,?)
-        ON CONFLICT(formula_id, related_id) DO UPDATE SET
-            relation_type=excluded.relation_type""",
-    "quantity": """INSERT INTO quantity
-        (id, name, symbol, symbol_overwrite, topic,
-         difficulty, description, links, is_dim, default_unit,
-         dim_M, dim_L, dim_T, dim_I, dim_Θ, dim_N, dim_J)
-        VALUES (?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?,?)
-        ON CONFLICT(id) DO UPDATE SET
-            name=excluded.name, symbol=excluded.symbol,
-            symbol_overwrite=excluded.symbol_overwrite,
-            topic=excluded.topic, difficulty=excluded.difficulty,
-            description=excluded.description, links=excluded.links,
-            is_dim=excluded.is_dim, default_unit=excluded.default_unit,
-            dim_M=excluded.dim_M, dim_L=excluded.dim_L, dim_T=excluded.dim_T,
-            dim_I=excluded.dim_I, dim_Θ=excluded.dim_Θ,
-            dim_N=excluded.dim_N, dim_J=excluded.dim_J""",
-    "unit": """INSERT INTO unit
-        (id, name, symbol, quantity_id, default_unit, unit_system,
-         factor, latex_factor, offset)
-        VALUES (?,?,?,?,?,?,?,?,?)
-        ON CONFLICT(id) DO UPDATE SET
-            name=excluded.name, symbol=excluded.symbol,
-            quantity_id=excluded.quantity_id, default_unit=excluded.default_unit,
-            unit_system=excluded.unit_system, factor=excluded.factor,
-            latex_factor=excluded.latex_factor, offset=excluded.offset""",
-}
 
 
 def _each_table(conn):
@@ -1140,174 +1075,4 @@ def export_to_ods(conn, output):
                 cell.addElement(P(text=str(value) if value is not None else ""))
                 row.addElement(cell)
             sheet.addElement(row)
-    document.save(output)
 
-
-def _read_csv(path):
-    """Read a CSV file, returning (headers, rows)."""
-    with open(path, newline="") as f:
-        reader = csv.reader(f)
-        headers = next(reader, None)
-        rows = list(reader)
-    return headers, rows
-
-
-def _read_xlsx(path):
-    """Read an XLSX file, returning {sheet_name: (headers, rows)}."""
-    from openpyxl import load_workbook
-    workbook = load_workbook(path, read_only=True)
-    sheets = {}
-    for name in workbook.sheetnames:
-        sheet = workbook[name]
-        rows = list(sheet.iter_rows(values_only=True))
-        if rows:
-            sheets[name] = (list(rows[0]), [list(r) for r in rows[1:]])
-    workbook.close()
-    return sheets
-
-
-def _read_ods(path):
-    """Read an ODS file, returning {sheet_name: (headers, rows)}."""
-    from odf.opendocument import load
-    from odf.table import Table, TableRow
-    from odf.text import P
-    document = load(path)
-    sheets = {}
-    for table_element in document.getElementsByType(Table):
-        name = table_element.getAttribute("name")
-        rows = []
-        for row_element in table_element.getElementsByType(TableRow):
-            cells = []
-            for cell in row_element.childNodes:
-                cell_text = None
-                for paragraph in cell.getElementsByType(P):
-                    texts = [n.data for n in paragraph.childNodes if hasattr(n, "data")]
-                    cell_text = "".join(texts)
-                    break
-                cells.append(cell_text)
-            if any(c is not None and c.strip() for c in cells):
-                rows.append(cells)
-        if rows:
-            sheets[name] = (list(rows[0]), rows[1:])
-    return sheets
-
-
-def _import_worksheets(conn, sheets):
-    """Import from {table_name: (headers, rows)}. Returns row counts per table."""
-    counts = {}
-    table_map = {}
-    for name in sheets:
-        for table in EXPORT_TABLE_ORDER:
-            if table.startswith(name) or name.startswith(table):
-                table_map[table] = sheets[name]
-                break
-    conn.execute("BEGIN")
-    try:
-        for table in EXPORT_TABLE_ORDER:
-            if table in table_map:
-                headers, rows = table_map[table]
-                counts[table] = _insert_rows(conn, table, headers, rows)
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    return counts
-
-
-def _insert_rows(conn, table, headers, rows):
-    expected = EXPORT_TABLE_COLUMNS[table]
-    col_indices = [headers.index(c) for c in expected if c in headers]
-    if not col_indices:
-        return 0
-    sql = IMPORT_INSERT_SQL[table]
-    required = REQUIRED_COLUMNS.get(table, set())
-    required_indices = {expected.index(c) for c in required if c in expected}
-    cleaned = []
-    for row in rows:
-        if not row:
-            continue
-        values = [row[i] if i < len(row) else "" for i in col_indices]
-        cleaned.append(tuple(
-            v if (v != "" or i in required_indices) else None
-            for i, v in enumerate(values)
-        ))
-    if cleaned:
-        conn.executemany(sql, cleaned)
-    return len(cleaned)
-
-
-def import_from_csv(conn, csv_text):
-    """Import tables from a CSV string with section headers. Returns row counts."""
-    counts = {}
-    reader = csv.reader(StringIO(csv_text))
-    current_table = None
-    header_row = None
-    col_indices = []
-    required_indices = set()
-    rows_buffer = []
-
-    def flush():
-        if not current_table or not rows_buffer:
-            return
-        sql = IMPORT_INSERT_SQL[current_table]
-        cleaned = []
-        for row in rows_buffer:
-            values = [row[i] if i < len(row) else "" for i in col_indices]
-            cleaned.append(tuple(
-                v if (v != "" or i in required_indices) else None
-                for i, v in enumerate(values)
-            ))
-        conn.executemany(sql, cleaned)
-        counts[current_table] = len(rows_buffer)
-        rows_buffer.clear()
-
-    conn.execute("BEGIN")
-    try:
-        for row in reader:
-            if not row or all(c.strip() == "" for c in row):
-                continue
-            if row[0].startswith("=== ") and row[0].endswith(" ==="):
-                flush()
-                current_table = row[0][4:-4].strip()
-                header_row = None
-                col_indices = []
-                required_indices = set()
-                continue
-            if current_table and header_row is None:
-                header_row = row
-                expected = EXPORT_TABLE_COLUMNS.get(current_table, [])
-                col_indices = [header_row.index(c) for c in expected if c in header_row]
-                required = REQUIRED_COLUMNS.get(current_table, set())
-                required_indices = {
-                    idx for idx, col in enumerate(expected)
-                    if col in required and col in header_row
-                }
-                continue
-            if current_table and col_indices:
-                rows_buffer.append(tuple(row))
-        flush()
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    return counts
-
-
-def import_from_csv_directory(conn, directory):
-    """Import tables from per-table CSV files in a directory."""
-    path = Path(directory)
-    return _import_worksheets(conn, {
-        table: _read_csv(path / f"{table}.csv")
-        for table in EXPORT_TABLE_ORDER
-        if (path / f"{table}.csv").exists()
-    })
-
-
-def import_from_xlsx(conn, path):
-    """Import tables from an XLSX workbook."""
-    return _import_worksheets(conn, _read_xlsx(path))
-
-
-def import_from_ods(conn, path):
-    """Import tables from an ODS spreadsheet."""
-    return _import_worksheets(conn, _read_ods(path))

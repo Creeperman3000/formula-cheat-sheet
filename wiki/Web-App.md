@@ -15,7 +15,6 @@ Flask web app at `webapp.py`. Run with `python webapp.py` and open `http://local
 | `/search?q=<query>` | Full-text search |
 | `/base-units` | Redirect to `/quantities?is_dim=1` |
 | `/export?format=<fmt>` | Download database export (csv, xlsx, ods) |
-| `/import` | Upload data file (POST) |
 
 ## Features
 
@@ -36,7 +35,7 @@ Toggle between variable mode (default) and unit mode for formula dimension displ
 From the formula detail page: copy as LaTeX, Unicode (via CDN `unicodeit`), or image (via CDN `html-to-image` to PNG).
 
 ### Data Management
-Export formulas/quantities/units as CSV (zipped), XLSX, or ODS. Import via file upload.
+Export formulas/quantities/units as CSV (zipped), XLSX, or ODS.
 
 ## Templates
 

@@ -2,7 +2,6 @@
 """Scifind web app — Flask interface to the formula database."""
 
 import html as html_module
-import hmac
 import io
 import json
 import logging
@@ -54,10 +53,6 @@ from scifind_lib import (
     export_to_csv_directory,
     export_to_xlsx,
     export_to_ods,
-    import_from_csv,
-    import_from_csv_directory,
-    import_from_xlsx,
-    import_from_ods,
     DIMENSION_SYMBOLS,
 )
 
@@ -66,8 +61,6 @@ app.secret_key = os.environ.get("SCIFIND_SECRET_KEY") or secrets.token_hex(24)
 app.config["MAX_CONTENT_LENGTH"] = (
     int(os.environ.get("SCIFIND_MAX_UPLOAD_MB", "32")) * 1024 * 1024
 )
-
-IMPORT_TOKEN = os.environ.get("SCIFIND_IMPORT_TOKEN", "")
 
 MIN_DIFFICULTY = 0
 MAX_DIFFICULTY = 10
@@ -90,6 +83,7 @@ class FilterState:
     diff_min: int = MIN_DIFFICULTY
     diff_max: int = MAX_DIFFICULTY
     dimension_filter: dict = field(default_factory=dict)
+    dim_mode: str = "and"
     base_quantity_only: int = 0
 
     @property
@@ -111,17 +105,32 @@ def _csv_list(value):
     return [part.strip() for part in value.split(",") if part.strip()]
 
 
-def parse_filter_state(args) -> FilterState:
+def parse_filter_state(args, path="") -> FilterState:
+    mode_switched_raw = args.get("mode_switched", "")
+    mode_switched = set(_csv_list(mode_switched_raw)) if mode_switched_raw else set()
+    is_qty_page = "/quantities" in path or "/quantity/" in path or "/unit/" in path
+    if mode_switched:
+        dim_mode = "or" if "dim" in mode_switched else "and"
+        quantity_mode = "or" if ("qty" if is_qty_page else "fml") in mode_switched else ("and" if is_qty_page else "and")
+    else:
+        dim_mode = args.get("dim_mode", "and")
+        if dim_mode not in ("and", "or"):
+            dim_mode = "and"
+        quantity_mode = args.get("qty_mode", "and")
+        if quantity_mode not in ("and", "or"):
+            quantity_mode = "and"
+
     dimension_filter = {}
     for symbol in DIMENSION_SYMBOLS:
-        op = args.get(f"{symbol}_o", "eq")
-        if op not in ("eq", "gte", "lte"):
-            op = "eq"
-        dimension_filter[symbol] = {"op": op, "val": _safe_int(args.get(f"{symbol}_v"))}
-
-    quantity_mode = args.get("qty_mode", "and")
-    if quantity_mode not in ("and", "or"):
-        quantity_mode = "and"
+        val = None
+        op = "eq"
+        for candidate_op in ("eq", "geq", "leq"):
+            v = _safe_int(args.get(f"{symbol}_{candidate_op}"))
+            if v is not None:
+                val = v
+                op = candidate_op
+                break
+        dimension_filter[symbol] = {"op": op, "val": val}
 
     ids_raw = args.get("ids")
     return FilterState(
@@ -133,6 +142,7 @@ def parse_filter_state(args) -> FilterState:
         diff_min=_safe_int(args.get("diff_min"), MIN_DIFFICULTY),
         diff_max=_safe_int(args.get("diff_max"), MAX_DIFFICULTY),
         dimension_filter=dimension_filter,
+        dim_mode=dim_mode,
         base_quantity_only=_safe_int(args.get("is_dim"), 0) or 0,
     )
 
@@ -245,7 +255,7 @@ def _tree_name_map(tree, locale):
     out = {}
     def walk(node):
         out[node["id"]] = localise(
-            node.get("translations") or {}, locale, default=node["id"],
+            node.get("translations") or {}, locale,
         )
         for child in (node.get("children") or []):
             walk(child)
@@ -285,23 +295,15 @@ def _jstree_data(tree, name_map, compressed, exclude_all=False, ids_provided=Fal
 
 
 def _attach_breadcrumbs(row, locale):
-    """Add science/branch/subbranch/topic ids and names to a row."""
+    """Add a breadcrumbs list to a row (root-first ordered ancestor chain)."""
     tree = _sciences_tree()
     name_map = _tree_name_map(tree, locale)
-    topic = row.get("topic_id") or row.get("topic")
+    topic = row.get("topic_id")
     path = _topic_path(tree, topic)
     if path:
-        levels = list(path) + [None] * (4 - len(path))
+        row["breadcrumbs"] = [{"id": n, "name": name_map.get(n, n)} for n in path]
     else:
-        levels = [None] * 4
-    row["science_id"] = levels[0] or ""
-    row["branch_id"] = levels[1] or ""
-    row["subbranch_id"] = levels[2] or ""
-    row["topic_id"] = levels[3] or topic or ""
-    row["science"] = name_map.get(levels[0], "") if levels[0] else ""
-    row["branch"] = name_map.get(levels[1], "") if levels[1] else ""
-    row["subbranch"] = name_map.get(levels[2], "") if levels[2] else ""
-    row["topic"] = name_map.get(levels[3] or topic, "") if (levels[3] or topic) else ""
+        row["breadcrumbs"] = []
     return row
 
 
@@ -317,14 +319,11 @@ def _filtered_ids_for_query(tree, ids):
 
 SUPERSCRIPT_DIGITS = str.maketrans("0123456789-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻")
 
-import unicodeit as _unicodeit
-
-_LATEX_MATHCAL_RE = re.compile(r"\\(?:mathrm|text)\{([^}]*)\}")
+_LATEX_TEXTCMD_RE = re.compile(r"\\(?:mathrm|text)\{([^}]*)\}")
 
 
-def _latex_to_unicode(text):
-    text = _LATEX_MATHCAL_RE.sub(r"\1", text)
-    return _unicodeit.replace(text)
+def _strip_textcmd(text):
+    return _LATEX_TEXTCMD_RE.sub(r"\1", text)
 
 
 def _join_names(names):
@@ -365,11 +364,11 @@ def _heading_from_compressed(view_label, compressed, name_map, locale, fs,
     if names:
         parts.append(f"from {_join_names(names)}")
 
-    dim_caches = dimension_caches or {}
-    x_map = dim_caches.get("var" if dim_mode == "unit" else dim_mode, {})
-    y_map = dim_caches.get("unit", {})
+    caches = dimension_caches or {}
+    x_map = caches.get("var" if dim_mode == "unit" else dim_mode, {})
+    y_map = caches.get("unit", {})
 
-    op_syms = {"eq": "=", "gte": "\u2265", "lte": "\u2264"}
+    op_syms = {"eq": "=", "geq": "\u2265", "leq": "\u2264"}
 
     extra = []
     for symbol in DIMENSION_SYMBOLS:
@@ -378,8 +377,8 @@ def _heading_from_compressed(view_label, compressed, name_map, locale, fs,
         if value is None:
             continue
         op = d.get("op", "eq")
-        x_sym = _latex_to_unicode(x_map.get(symbol, symbol))
-        y_sym = _latex_to_unicode(y_map.get(symbol, symbol))
+        x_sym = _strip_textcmd(x_map.get(symbol, symbol))
+        y_sym = _strip_textcmd(y_map.get(symbol, symbol))
         dv = str(value).translate(SUPERSCRIPT_DIGITS)
         extra.append(f"{x_sym} {op_syms[op]} {y_sym}{dv}")
     if active_quantity_names:
@@ -538,7 +537,7 @@ def render_symbol(symbol):
 @app.context_processor
 def inject_globals():
     locale = g.get("locale", "en-us")
-    fs = parse_filter_state(request.args)
+    fs = parse_filter_state(request.args, request.path)
     tree = _sciences_tree()
     name_map = _tree_name_map(tree, locale)
     compressed = _compress_selection(tree, fs.ids)
@@ -595,6 +594,9 @@ def inject_globals():
         diff_max=fs.diff_max,
         current_view=current_view,
         dim_filter=fs.dimension_filter,
+        dim_mode=fs.dim_mode,
+        qty_mode=fs.quantity_mode,
+        mode_switched=_csv_list(request.args.get("mode_switched", "")),
         active_qty_ids=fs.quantity_ids,
         all_quantities_for_filter=all_quantities_for_filter,
         dim_symbols=dim_symbols,
@@ -615,19 +617,31 @@ def base_units_page():
     return redirect("/quantities?is_dim=1")
 
 
-def _dimension_matches(row_dimensions, dimension_filter):
-    """Check a row's dimension dict against the user's filter."""
-    for symbol, df in dimension_filter.items():
-        value = df["val"]
-        if value is None:
-            continue
+def _dimension_matches(row_dimensions, dimension_filter, dim_mode="and"):
+    active = [(symbol, df) for symbol, df in dimension_filter.items() if df["val"] is not None]
+    if not active:
+        return True
+    if dim_mode == "or":
+        for symbol, df in active:
+            actual = row_dimensions.get(f"dim_{symbol}") or 0
+            op = df["op"]
+            value = df["val"]
+            if op == "eq" and actual == value:
+                return True
+            if op == "geq" and actual >= value:
+                return True
+            if op == "leq" and actual <= value:
+                return True
+        return False
+    for symbol, df in active:
         actual = row_dimensions.get(f"dim_{symbol}") or 0
         op = df["op"]
+        value = df["val"]
         if op == "eq" and actual != value:
             return False
-        if op == "gte" and actual < value:
+        if op == "geq" and actual < value:
             return False
-        if op == "lte" and actual > value:
+        if op == "leq" and actual > value:
             return False
     return True
 
@@ -809,10 +823,10 @@ def search_page():
 def all_quantities():
     db = get_db()
     locale = g.locale
-    fs = parse_filter_state(request.args)
+    fs = parse_filter_state(request.args, request.path)
     tree = _sciences_tree()
-
-    if _compress_selection(tree, fs.ids) == {r["id"] for r in tree}:
+    compressed = _compress_selection(tree, fs.ids)
+    if compressed == {r["id"] for r in tree}:
         return redirect("/quantities")
 
     if fs.exclude_all or (fs.ids_provided and not fs.ids):
@@ -834,7 +848,7 @@ def all_quantities():
 
         if topic_filter and q.get("topic_id") not in topic_filter:
             continue
-        if fs.has_dimension_filter and not _dimension_matches(q, fs.dimension_filter):
+        if fs.has_dimension_filter and not _dimension_matches(q, fs.dimension_filter, fs.dim_mode):
             continue
         if fs.quantity_ids and q["id"] not in fs.quantity_ids:
             continue
@@ -862,7 +876,7 @@ def all_quantities():
     except sqlite3.OperationalError:
         dim_caches = {"var": {}, "unit": {}, "dim": {}}
     heading = _heading_from_compressed(
-        "Quantities", _compress_selection(tree, fs.ids), name_map, locale, fs,
+        "Quantities", compressed, name_map, locale, fs,
         dim_mode=g.get("dim_mode", "dim"), dimension_caches=dim_caches,
     )
     if fs.base_quantity_only:
@@ -874,7 +888,7 @@ def all_quantities():
 def all_formulas():
     db = get_db()
     locale = g.locale
-    fs = parse_filter_state(request.args)
+    fs = parse_filter_state(request.args, request.path)
     tree = _sciences_tree()
     compressed = _compress_selection(tree, fs.ids)
     if compressed == {r["id"] for r in tree}:
@@ -900,7 +914,7 @@ def all_formulas():
         dim_map = compute_all_formula_dimensions(db)
         formulas = [
             f for f in formulas
-            if _dimension_matches(dim_map.get(f["id"], {}), fs.dimension_filter)
+            if _dimension_matches(dim_map.get(f["id"], {}), fs.dimension_filter, fs.dim_mode)
         ]
 
     if fs.quantity_ids:
@@ -979,88 +993,6 @@ def export():
         mimetype="application/zip",
         headers={"Content-Disposition": "attachment; filename=formulas_csv.zip"},
     )
-
-
-# ---------------------------------------------------------------------------
-# Import
-# ---------------------------------------------------------------------------
-
-def _is_within(base, target):
-    """True if target is inside base (used for zip-slip protection)."""
-    base = Path(base).resolve()
-    target = Path(target).resolve()
-    try:
-        target.relative_to(base)
-        return True
-    except ValueError:
-        return False
-
-
-_ALLOWED_IMPORT_EXTENSIONS = (".csv", ".xlsx", ".ods", ".zip")
-
-
-def _import_by_extension(db, ext, raw):
-    """Dispatch an import based on file extension. Returns a counts dict."""
-    if ext == ".csv":
-        return import_from_csv(db, raw.decode("utf-8"))
-    if ext == ".xlsx":
-        return import_from_xlsx(db, io.BytesIO(raw))
-    if ext == ".ods":
-        return import_from_ods(db, io.BytesIO(raw))
-    if ext == ".zip":
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            with zipfile.ZipFile(io.BytesIO(raw)) as zf:
-                for member in zf.infolist():
-                    dest = (tmp_path / member.filename).resolve()
-                    if not _is_within(tmp_path, dest):
-                        raise ValueError(f"Refused unsafe path in zip: {member.filename}")
-                zf.extractall(tmp_path)
-            return import_from_csv_directory(db, str(tmp_path))
-    raise ValueError(
-        f"Unsupported file extension: {ext}. Use .csv, .zip, .xlsx, or .ods."
-    )
-
-
-@app.route("/import", methods=["POST"])
-def import_file():
-    if not IMPORT_TOKEN:
-        return "Import endpoint is disabled (SCIFIND_IMPORT_TOKEN not set).", 403
-
-    file = request.files.get("file")
-    if not file or not file.filename:
-        flash("No file selected.", "error")
-        return redirect("/")
-
-    provided = (
-        request.headers.get("X-Import-Token", "")
-        or request.form.get("import_token", "")
-    )
-    if not hmac.compare_digest(provided, IMPORT_TOKEN):
-        return "Forbidden: missing or invalid import token.", 403
-
-    ext = Path(file.filename).suffix.lower()
-    if ext not in _ALLOWED_IMPORT_EXTENSIONS:
-        flash(
-            f"Unsupported file type '{ext}'. Allowed: {', '.join(_ALLOWED_IMPORT_EXTENSIONS)}",
-            "error",
-        )
-        return redirect("/")
-
-    raw = file.stream.read()
-    db = get_db()
-    try:
-        counts = _import_by_extension(db, ext, raw)
-        rebuild_search_indexes(db)
-        parts = [f"{k}: {v}" for k, v in counts.items() if v > 0]
-        if parts:
-            flash(f"Imported {len(parts)} table(s): {', '.join(parts)}", "success")
-        else:
-            flash("No data imported.", "success")
-    except Exception as exc:
-        logger.exception("Import failed: %s", exc)
-        flash(f"Import failed: {exc}", "error")
-    return redirect("/")
 
 
 if __name__ == "__main__":

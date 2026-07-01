@@ -63,11 +63,10 @@ Edit `seed.sql`, `seed_units.sql`, and/or `seed_formulas.sql`. Re-initialize wit
 python scifind_cli.py init  # drops and recreates DB
 ```
 
-## Export/Import
+## Export
 
 ```bash
 python scifind_cli.py export --format csv --output formulas.csv
-python scifind_cli.py import formulas.csv
 ```
 
 Supported formats: `csv`, `csvdir`, `xlsx`, `ods`.

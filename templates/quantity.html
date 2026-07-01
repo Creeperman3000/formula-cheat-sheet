@@ -4,21 +4,12 @@
 
 <h2 class="detail-heading">{% if q.symbol %}${{ q.symbol }}$ {% endif %}{{ q.name_en }}</h2>
 
-{% if q.science_id %}
+{% if q.breadcrumbs %}
 <div class="breadcrumb-bar">
-  <a href="/quantities?ids={{ q.science_id }}">{{ q.science }}</a>
-  {% if q.branch_id %}
-  &gt;
-  <a href="/quantities?ids={{ q.branch_id }}">{{ q.branch }}</a>
-  {% endif %}
-  {% if q.subbranch_id %}
-  &gt;
-  <a href="/quantities?ids={{ q.subbranch_id }}">{{ q.subbranch }}</a>
-  {% endif %}
-  {% if q.topic_id %}
-  &gt;
-  <a href="/quantities?ids={{ q.topic_id }}">{{ q.topic }}</a>
-  {% endif %}
+{% for crumb in q.breadcrumbs %}
+  {% if not loop.first %} &gt; {% endif %}
+  <a href="/quantities?ids={{ crumb.id }}">{{ crumb.name }}</a>
+{% endfor %}
 </div>
 {% endif %}
 

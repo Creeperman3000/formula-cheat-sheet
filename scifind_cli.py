@@ -11,7 +11,6 @@ Usage:
     scifind_cli units [--quantity Q]            List units
     scifind_cli browse                          Browse branch/topic tree
     scifind_cli export [options]                Export all tables
-    scifind_cli import <file>                   Import tables from file
 """
 
 import argparse
@@ -48,10 +47,6 @@ from scifind_lib import (
     export_to_csv_directory,
     export_to_xlsx,
     export_to_ods,
-    import_from_csv,
-    import_from_csv_directory,
-    import_from_xlsx,
-    import_from_ods,
 )
 
 
@@ -420,28 +415,6 @@ def command_export(args):
     conn.close()
 
 
-def command_import(args):
-    conn = open_database()
-    path = Path(args.file)
-    ext = path.suffix.lower()
-
-    if path.is_dir():
-        counts = import_from_csv_directory(conn, str(path))
-    elif ext == ".xlsx":
-        counts = import_from_xlsx(conn, str(path))
-    elif ext == ".ods":
-        counts = import_from_ods(conn, str(path))
-    else:
-        data = path.read_text(encoding="utf-8") if args.file != "-" else sys.stdin.read()
-        counts = import_from_csv(conn, data)
-
-    rebuild_search_indexes(conn)
-    conn.close()
-    print("Imported:")
-    for table, count in counts.items():
-        print(f"  {table}: {count} rows")
-
-
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -464,9 +437,6 @@ def main():
               scifind_cli export --format csvdir -o ./backup
               scifind_cli export --format xlsx -o formulas.xlsx
               scifind_cli export --format ods -o formulas.ods
-              scifind_cli import backup.csv
-              scifind_cli import ./backup
-              scifind_cli import formulas.xlsx
         """),
     )
     parser.add_argument("--db", help=f"Database path (default: {default_database})")
@@ -507,9 +477,6 @@ def main():
     )
     p_export.add_argument("--output", "-o", help="Output file or directory")
 
-    p_import = subcommands.add_parser("import", help="Import tables from file or directory")
-    p_import.add_argument("file", help="CSV/XLSX/ODS file or CSV directory")
-
     args = parser.parse_args()
     if args.db:
         os.environ["FORMULA_DB"] = args.db
@@ -524,7 +491,6 @@ def main():
         "units": command_units,
         "browse": command_browse,
         "export": command_export,
-        "import": command_import,
     }
     try:
         commands[args.command](args)

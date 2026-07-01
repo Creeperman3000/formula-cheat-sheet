@@ -61,13 +61,6 @@ Export the entire database.
 python scifind_cli.py export --format csv|csvdir|xlsx|ods [--output <path>]
 ```
 
-### `import`
-Import data from file or directory.
-
-```bash
-python scifind_cli.py import <file_or_directory>
-```
-
 ## Options
 
 | Flag | Description |

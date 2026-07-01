@@ -5,15 +5,10 @@
 <h2 class="detail-heading">{{ formula.name_en }}</h2>
 
 <div class="breadcrumb-bar">
-  <a href="/formulas?ids={{ formula.science_id }}">{{ formula.science }}</a>
-  &gt;
-  <a href="/formulas?ids={{ formula.branch_id }}">{{ formula.branch }}</a>
-  {% if formula.subbranch_id %}
-  &gt;
-  <a href="/formulas?ids={{ formula.subbranch_id }}">{{ formula.subbranch }}</a>
-  {% endif %}
-  &gt;
-  <a href="/formulas?ids={{ formula.topic_id }}">{{ formula.topic }}</a>
+{% for crumb in formula.breadcrumbs %}
+  {% if not loop.first %} &gt; {% endif %}
+  <a href="/formulas?ids={{ crumb.id }}">{{ crumb.name }}</a>
+{% endfor %}
 </div>
 
 <div class="detail-meta">
@@ -28,10 +23,7 @@
   <span id="formula-tex" style="display:none">{{ latex }}</span>
   <div class="formula-copy-wrap">
     <button class="formula-copy-btn" onclick="toggleCopyMenu(event)">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-      </svg>
+      <i data-lucide="copy" width="16" height="16"></i>
     </button>
     <div class="formula-copy-menu" id="formula-copy-menu">
       <button onclick="copyFormula('latex')">LaTeX</button>
